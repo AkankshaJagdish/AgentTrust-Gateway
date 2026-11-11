@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { currentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { audit } from "@/lib/audit";
+export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){const user=await currentUser();if(!user)return NextResponse.json({error:"Unauthorized"},{status:401});const {id}=await params;const policy=await prisma.spendingPolicy.findFirst({where:{id,userId:user.id}});if(!policy)return NextResponse.json({error:"Policy not found."},{status:404});const body=await request.json() as {enabled?:boolean};if(typeof body.enabled!=="boolean")return NextResponse.json({error:"enabled must be boolean."},{status:400});const updated=await prisma.spendingPolicy.update({where:{id},data:{enabled:body.enabled}});await audit({userId:user.id,actorType:"USER",actorId:user.id,action:"SPENDING_POLICY_TOGGLED",entityType:"SpendingPolicy",entityId:id,outcome:"SUCCESS",metadata:{enabled:body.enabled}});return NextResponse.json(updated);}
