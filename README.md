@@ -33,7 +33,7 @@ Go to http://localhost:3000 and create a merchant account. The console reads per
 
 ## Agent signing contract
 
-Agent enrollment returns a one-time secret and key ID. The server stores only SHA-256(secret). The HMAC-SHA256 key used for signing is SHA256(secret). Canonical payload:
+Agent enrollment returns a one-time secret and key ID. The server stores only SHA-256(secret). The HMAC-SHA256 key used for signing is that SHA-256 digest. Canonical payload:
 
 ```text
 METHOD
