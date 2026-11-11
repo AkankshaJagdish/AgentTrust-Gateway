@@ -2,8 +2,24 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyAgentRequest } from "@/lib/agent-signatures";
 import { evaluatePolicy } from "@/lib/policy";
-import { createPayPalOrder } from "@/lib/paypal";
+import { createPayPalOrder, markOrderStatus } from "@/lib/paypal";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-const schema=z.object({amount:z.string(),currency:z.string().length(3),returnUrl:z.string().url().optional(),cancelUrl:z.string().url().optional(),reference:z.string().max(120).optional()});
-export async function POST(request:Request){const raw=await request.text();const verified=await verifyAgentRequest({keyId:request.headers.get("x-agent-key-id"),timestamp:request.headers.get("x-agent-timestamp"),nonce:request.headers.get("x-agent-nonce"),signature:request.headers.get("x-agent-signature")},request.method,new URL(request.url).pathname,raw);if(!verified.ok)return NextResponse.json({decision:"BLOCK",reason:verified.reason,requestId:verified.requestId},{status:403});try{const input=schema.parse(JSON.parse(raw));const policy=await evaluatePolicy({agentId:verified.agentId,amount:input.amount,currency:input.currency,requestId:verified.requestId});await prisma.agentRequest.update({where:{requestId:verified.requestId},data:{amount:input.amount,currency:input.currency,consentId:policy.consentId,policyId:policy.policyId,decision:policy.decision,reason:policy.reason,status:"EVALUATED"}});await audit({actorType:"AGENT",actorId:verified.agentId,action:"POLICY_EVALUATED",entityType:"AgentRequest",entityId:verified.requestId,outcome:policy.decision,reason:policy.reason,metadata:{amount:input.amount,currency:input.currency}});if(policy.decision!=="ALLOW")return NextResponse.json({decision:policy.decision,reason:policy.reason,requestId:verified.requestId},{status:policy.decision==="BLOCK"?403:202});const origin=process.env.APP_URL??new URL(request.url).origin;const order=await createPayPalOrder({agentId:verified.agentId,agentRequestId:verified.requestId,amount:input.amount,currency:input.currency,returnUrl:input.returnUrl??`${origin}/api/paypal/return`,cancelUrl:input.cancelUrl??`${origin}/dashboard?payment=cancelled`});return NextResponse.json({decision:"ALLOW",reason:policy.reason,requestId:verified.requestId,orderId:order.paypalOrderId,approvalUrl:order.approvalUrl,status:order.paypalStatus},{status:201});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Checkout rejected.",requestId:verified.requestId},{status:400});}}
+const schema=z.object({amount:z.string(),currency:z.string().length(3),returnUrl:z.string().url().optional(),cancelUrl:z.string().url().optional()});
+export async function POST(request:Request){
+ const raw=await request.text();
+ const verified=await verifyAgentRequest({keyId:request.headers.get("x-agent-key-id"),timestamp:request.headers.get("x-agent-timestamp"),nonce:request.headers.get("x-agent-nonce"),signature:request.headers.get("x-agent-signature")},request.method,new URL(request.url).pathname,raw);
+ if(!verified.ok)return NextResponse.json({decision:"BLOCK",reason:verified.reason,requestId:verified.requestId},{status:403});
+ try{
+  const input=schema.parse(JSON.parse(raw));
+  const agent=await prisma.agent.findUnique({where:{id:verified.agentId}});
+  if(!agent?.userId)throw new Error("The agent must be linked to a merchant account.");
+  const policy=await evaluatePolicy({agentId:verified.agentId,amount:input.amount,currency:input.currency,requestId:verified.requestId});
+  await prisma.agentRequest.update({where:{requestId:verified.requestId},data:{amount:input.amount,currency:input.currency,consentId:policy.consentId,policyId:policy.policyId,decision:policy.decision,reason:policy.reason,status:"EVALUATED"}});
+  await audit({userId:agent.userId,actorType:"AGENT",actorId:verified.agentId,action:"POLICY_EVALUATED",entityType:"AgentRequest",entityId:verified.requestId,outcome:policy.decision,reason:policy.reason});
+  if(policy.decision!=="ALLOW")return NextResponse.json({decision:policy.decision,reason:policy.reason,requestId:verified.requestId},{status:policy.decision==="BLOCK"?403:202});
+  const origin=process.env.APP_URL??new URL(request.url).origin;
+  const order=await createPayPalOrder({agentId:verified.agentId,agentRequestId:verified.requestId,amount:input.amount,currency:input.currency,merchantId:agent.userId,returnUrl:input.returnUrl??`${origin}/api/paypal/return`,cancelUrl:input.cancelUrl??`${origin}/api/paypal/cancel`});
+  return NextResponse.json({decision:"ALLOW",reason:policy.reason,requestId:verified.requestId,orderId:order.paypalOrderId,approvalUrl:order.approvalUrl,status:order.paypalStatus},{status:201});
+ }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Checkout rejected.",requestId:verified.requestId},{status:400});}
+}
