@@ -29,6 +29,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   if(!consent&&!disableOnly)return NextResponse.json({error:"Human consent is revoked or expired; policy cannot be edited or enabled."},{status:409});
   if(!consent&&disableOnly){
    const disabled=await prisma.$transaction(async tx=>{
+    const existing=await tx.spendingPolicyVersion.findUnique({where:{policyId_version:{policyId:id,version:policy.version}}});
+    if(!existing)await tx.spendingPolicyVersion.create({data:{policyId:id,version:policy.version,snapshot:snapshot(policy),sourceText:policy.naturalLanguage??undefined,actorUserId:user.id}});
     const next=await tx.spendingPolicy.update({where:{id},data:{enabled:false,version:{increment:1}}});
     await tx.spendingPolicyVersion.create({data:{policyId:id,version:next.version,snapshot:snapshot(next),sourceText:next.naturalLanguage??undefined,actorUserId:user.id}});
     return next;
@@ -43,6 +45,8 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   if(code!==consent.currency||maxPerTx.lte(0)||dailyCap.lte(0)||maxPerTx.gt(consent.spendingCap)||dailyCap.gt(consent.spendingCap))return NextResponse.json({error:"Policy currency must match consent and positive limits must remain within its cap."},{status:400});
   if(threshold&&(!threshold.gt(0)||threshold.gt(maxPerTx)))return NextResponse.json({error:"Approval threshold must be positive and no greater than the transaction limit."},{status:400});
   const updated=await prisma.$transaction(async tx=>{
+   const existing=await tx.spendingPolicyVersion.findUnique({where:{policyId_version:{policyId:id,version:policy.version}}});
+   if(!existing)await tx.spendingPolicyVersion.create({data:{policyId:id,version:policy.version,snapshot:snapshot(policy),sourceText:policy.naturalLanguage??undefined,actorUserId:user.id}});
    const next=await tx.spendingPolicy.update({where:{id},data:{
     name:body.name??policy.name,maxPerTx,dailyCap,currency:code,requireApprovalAbove:threshold,
     enabled:body.enabled??policy.enabled,expiresAt:body.expiresAt===undefined?policy.expiresAt:body.expiresAt?new Date(body.expiresAt):null,
