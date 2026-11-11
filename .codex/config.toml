@@ -1,0 +1,3 @@
+# Project-level Codex defaults. Supply secrets as environment variables, never inline.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
