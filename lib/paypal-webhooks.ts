@@ -101,7 +101,9 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
         const capture=event.resource;
         if(capture?.id&&capture.amount?.value&&capture.amount.currency_code){
           const authorizationId=typeof (capture as any).processor_response?.authorization_id==="string"?(capture as any).processor_response.authorization_id:undefined;
-          const authorization=authorizationId?await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:authorizationId}}):null;
+          const authorization=authorizationId
+            ? await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:authorizationId}})
+            : await prisma.paymentAuthorization.findFirst({where:{paymentOrderId:order.id},orderBy:{createdAt:"desc"}});
           await prisma.paymentCapture.upsert({
             where:{paypalCaptureId:capture.id},
             create:{paymentOrderId:order.id,authorizationId:authorization?.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
