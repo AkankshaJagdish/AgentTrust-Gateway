@@ -16,7 +16,7 @@ export async function POST(request:Request){
   const code=currency(b.currency),maxPerTx=money(b.maxPerTx),dailyCap=money(b.dailyCap),threshold=b.requireApprovalAbove?money(b.requireApprovalAbove):null;
   if(code!==consent.currency)return NextResponse.json({error:"Policy currency must match the consent currency."},{status:400});
   if(!maxPerTx.gt(0)||!dailyCap.gt(0)||maxPerTx.gt(consent.spendingCap)||dailyCap.gt(consent.spendingCap))return NextResponse.json({error:"Policy limits must be positive and cannot exceed the human consent cap."},{status:400});
-  if(threshold&&(!threshold.gt(0)||threshold.gt(maxPerTx)))return NextResponse.json({error:"Approval threshold must be positive and no greater than the per-transaction limit."},{status:400});
+  if(threshold&&(!threshold.gt(0)||threshold.gte(maxPerTx)))return NextResponse.json({error:"Approval threshold must be positive and strictly below the per-transaction limit."},{status:400});
   const policy=await prisma.$transaction(async tx=>{
    const p=await tx.spendingPolicy.create({data:{userId:user.id,consentId:consent.id,name:b.name,maxPerTx,dailyCap,currency:code,requireApprovalAbove:threshold,expiresAt:b.expiresAt?new Date(b.expiresAt):null}});
    await tx.spendingPolicyVersion.create({data:{policyId:p.id,version:1,snapshot:snapshot(p),actorUserId:user.id}});
