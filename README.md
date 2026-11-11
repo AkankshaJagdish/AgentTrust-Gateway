@@ -215,3 +215,36 @@ npx context-plugins install paypal
 
 MCP and APIMatic are optional development aids, not application runtime dependencies. A cloud Codex session must verify its own remote connections; this GitHub-only session cannot claim those connections were authenticated or that the APIMatic plugin was installed.
 
+
+
+## Judge walkthrough and demo fixtures
+
+For a disposable local database only, configure `.env`, then run:
+
+```bash
+npm install
+npx prisma generate
+npm run db:push
+npm run db:seed:demo
+npm run dev
+```
+
+The seed output prints a one-time demo agent secret the first time it creates the fixture credential. Keep it local and do not commit it. The seed creates three agents (a verified demo credential, an unverified agent with no credential, and an expired agent), sample ALLOW/BLOCK/REQUIRE_APPROVAL requests, and a payment row labelled as simulated. These records are synthetic dashboard fixtures. The simulated payment has no PayPal order ID and does not represent PayPal buyer approval, authorization, capture, or voiding. Re-running the seed does not re-display an existing one-time secret.
+
+### What is and is not a genuine PayPal test
+
+A genuine sandbox order is created only by the signed `/api/agent/checkout` flow with valid sandbox REST credentials. Buyer approval must occur at the returned PayPal sandbox checkout URL. Authorization, human capture approval, capture, and void then exercise the corresponding server-side payment endpoints. Webhook tests require a registered sandbox webhook ID and a publicly reachable HTTPS endpoint. Never report synthetic seed rows or mocked unit tests as genuine PayPal sandbox transactions.
+
+### QA test commands
+
+```bash
+npm ci
+npx prisma generate
+npm run lint
+npm run typecheck
+npm test
+npx playwright test
+npm run build
+```
+
+See [database migration status and instructions](docs/DATABASE-MIGRATIONS.md). The project currently has no committed Prisma migration baseline; the documented migration creation step must be completed and reviewed before `prisma migrate deploy` is a valid fresh-install path.
