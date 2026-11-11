@@ -25,7 +25,17 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   if(!policy)return NextResponse.json({error:"Policy not found."},{status:404});
   if(!policy.consentId)return NextResponse.json({error:"Policy has no linked human consent."},{status:409});
   const consent=await prisma.consent.findFirst({where:{id:policy.consentId,userId:user.id,status:"ACTIVE",expiresAt:{gt:new Date()}}});
-  if(!consent)return NextResponse.json({error:"Human consent is revoked or expired; policy cannot be edited or enabled."},{status:409});
+  const disableOnly=body.enabled===false&&Object.keys(body).length===1;
+  if(!consent&&!disableOnly)return NextResponse.json({error:"Human consent is revoked or expired; policy cannot be edited or enabled."},{status:409});
+  if(!consent&&disableOnly){
+   const disabled=await prisma.$transaction(async tx=>{
+    const next=await tx.spendingPolicy.update({where:{id},data:{enabled:false,version:{increment:1}}});
+    await tx.spendingPolicyVersion.create({data:{policyId:id,version:next.version,snapshot:snapshot(next),sourceText:next.naturalLanguage??undefined,actorUserId:user.id}});
+    return next;
+   });
+   await audit({userId:user.id,actorType:"USER",actorId:user.id,action:"SPENDING_POLICY_VERSION_UPDATED",entityType:"SpendingPolicy",entityId:id,outcome:"SUCCESS",metadata:{version:disabled.version,changedFields:["enabled"]}});
+   return NextResponse.json(disabled);
+  }
   const code=currency(body.currency??policy.currency);
   const maxPerTx=body.maxPerTx!==undefined?money(body.maxPerTx):policy.maxPerTx;
   const dailyCap=body.dailyCap!==undefined?money(body.dailyCap):policy.dailyCap;
