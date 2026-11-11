@@ -1,5 +1,5 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
@@ -95,6 +95,10 @@ export async function createPayPalOrder(input: {
   if (!request || request.agentId !== agent.id || !request.signatureValid || request.decision !== "ALLOW") throw new PayPalError("A verified request with an ALLOW decision is required.");
   if (!request.amount || !money(request.amount.toString()).eq(amount) || request.currency !== code) throw new PayPalError("PayPal order amount/currency must match the allowed request.");
   const paypalPayeeId = process.env.PAYPAL_MERCHANT_ID || undefined;
+  const returnToken = randomBytes(32).toString("base64url");
+  const returnTokenHash = createHash("sha256").update(returnToken).digest("hex");
+  const returnUrl = new URL(input.returnUrl);
+  returnUrl.searchParams.set("return_token", returnToken);
   const order = await paypal<{ id: string; status: string; links?: { rel: string; href: string }[] }>("/v2/checkout/orders", {
     method: "POST",
     requestId: input.agentRequestId,
@@ -107,7 +111,7 @@ export async function createPayPalOrder(input: {
         amount: { currency_code: code, value: amount.toFixed(2) },
       }],
       payment_source: { paypal: { experience_context: {
-        return_url: input.returnUrl, cancel_url: input.cancelUrl, user_action: "CONTINUE",
+        return_url: returnUrl.toString(), cancel_url: input.cancelUrl, user_action: "CONTINUE",
       } } },
     },
   });
@@ -115,7 +119,9 @@ export async function createPayPalOrder(input: {
   if (!approvalUrl) throw new PayPalError("PayPal order was created but the approval link was not returned.");
   const payment = await prisma.paymentOrder.create({ data: {
     agentId: input.agentId, agentRequestId: input.agentRequestId, paypalOrderId: order.id,
-    merchantId: input.merchantId, paypalPayeeId, status: order.status === "APPROVED" ? "APPROVED" : "CREATED", amount, currency: code, approvalUrl,
+    merchantId: input.merchantId, paypalPayeeId, returnTokenHash,
+    returnTokenExpiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000),
+    status: order.status === "APPROVED" ? "APPROVED" : "CREATED", amount, currency: code, approvalUrl,
   } });
   await prisma.paymentStateTransition.create({ data: {
     paymentOrderId: payment.id, toStatus: payment.status, source: "PAYPAL_CREATE", externalId: order.id,
@@ -131,6 +137,25 @@ type PayPalOrderDetails = {
 };
 export async function getPayPalOrder(orderId: string) {
   return paypal<PayPalOrderDetails>(`/v2/checkout/orders/${encodeURIComponent(orderId)}`);
+}
+
+export async function authorizePayPalOrderFromBuyerReturn(orderId:string,returnToken:string) {
+  const tokenHash=createHash("sha256").update(returnToken).digest("hex");
+  const order=await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId},include:{agent:true,agentRequest:true}});
+  if(!order||order.returnTokenHash!==tokenHash||!order.returnTokenExpiresAt||order.returnTokenExpiresAt<=new Date()||order.returnTokenConsumedAt) {
+    throw new PayPalError("Buyer return token is invalid, expired, or already consumed.",401);
+  }
+  if(order.agent.userId!==order.merchantId||order.agent.status!=="ACTIVE"||!order.agentRequest.signatureValid||order.agentRequest.decision!=="ALLOW") {
+    throw new PayPalError("Agent or original request is no longer authorized.",403);
+  }
+  const consent=await prisma.consent.findFirst({where:{id:order.agentRequest.consentId??undefined,userId:order.merchantId,agentId:order.agentId,status:"ACTIVE",expiresAt:{gt:new Date()},currency:order.currency}});
+  const policy=await prisma.spendingPolicy.findFirst({where:{id:order.agentRequest.policyId??undefined,userId:order.merchantId,enabled:true,currency:order.currency,OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}]}});
+  if(!consent||!policy||order.amount.gt(consent.spendingCap)||order.amount.gt(policy.maxPerTx))throw new PayPalError("Human consent or spending policy is no longer valid.",403);
+  const state=await getPayPalOrder(orderId);
+  if(state.status!=="APPROVED")throw new PayPalError("PayPal has not confirmed buyer approval.",409);
+  const claimed=await prisma.paymentOrder.updateMany({where:{id:order.id,returnTokenHash:tokenHash,returnTokenConsumedAt:null,returnTokenExpiresAt:{gt:new Date()}},data:{returnTokenConsumedAt:new Date()}});
+  if(claimed.count!==1)throw new PayPalError("Buyer return token was already consumed.",409);
+  return authorizePayPalOrder(orderId,order.merchantId);
 }
 
 export async function authorizePayPalOrder(orderId: string, merchantId: string) {
