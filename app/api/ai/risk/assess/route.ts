@@ -14,11 +14,12 @@ export async function POST(request:Request){
   const agent=await prisma.agent.findFirst({where:{id:input.agentId,userId:user.id}});
   if(!agent)return NextResponse.json({error:"Agent not found in this merchant account."},{status:404});
   const evaluation=await evaluatePolicy({agentId:agent.id,amount:input.amount,currency:input.currency});
+  const latestRequest=await prisma.agentRequest.findFirst({where:{agentId:agent.id},orderBy:{createdAt:"desc"}});
   const consent=await prisma.consent.findFirst({where:{agentId:agent.id,userId:user.id,status:"ACTIVE",expiresAt:{gt:new Date()},currency:input.currency},orderBy:{createdAt:"desc"}});
   const policy=consent?await prisma.spendingPolicy.findFirst({where:{consentId:consent.id,userId:user.id,enabled:true,currency:input.currency,OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}]},orderBy:{createdAt:"desc"}}):null;
   const assessment=await assessTransactionRisk({
    amount:input.amount,currency:input.currency,description:input.description,agentName:agent.name,agentStatus:agent.status,
-   signatureVerified:false,consentActive:!!consent,consentCap:consent?.spendingCap.toString()??null,
+   signatureVerified:latestRequest?.signatureValid??false,consentActive:!!consent,consentCap:consent?.spendingCap.toString()??null,
    policyMaxPerTx:policy?.maxPerTx.toString()??null,policyDailyCap:policy?.dailyCap.toString()??null,
    deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason
   });
