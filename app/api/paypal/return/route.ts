@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { authorizePayPalOrder } from "@/lib/paypal";
+import { audit } from "@/lib/audit";
+import { prisma } from "@/lib/prisma";
+export async function GET(request:Request){const url=new URL(request.url);const token=url.searchParams.get("token");if(!token)return NextResponse.redirect(new URL("/dashboard?payment=missing-token",url));try{const order=await prisma.paymentOrder.findUnique({where:{paypalOrderId:token},include:{agent:{include:{consents:true}}}});if(!order)return NextResponse.redirect(new URL("/dashboard?payment=unknown-order",url));const currentConsent=await prisma.consent.findFirst({where:{agentId:order.agentId,status:"ACTIVE",expiresAt:{gt:new Date()}}});if(!currentConsent)return NextResponse.redirect(new URL("/dashboard?payment=consent-revoked",url));await authorizePayPalOrder(token);await audit({actorType:"PAYPAL",action:"ORDER_AUTHORIZED",entityType:"PaymentOrder",entityId:order.id,outcome:"AUTHORIZED"});return NextResponse.redirect(new URL("/dashboard?payment=authorized",url));}catch(e){return NextResponse.redirect(new URL("/dashboard?payment=error",url));}}
