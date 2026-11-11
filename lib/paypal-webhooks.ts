@@ -113,21 +113,27 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
         // Keep the event for reconciliation; never use webhook receipt as buyer consent or capture consent.
         await audit({actorType:"PAYPAL_WEBHOOK",action:"AUTHORIZATION_EVENT_RECEIVED",entityType:"PaymentOrder",entityId:order.id,outcome:"RECEIVED",metadata:{eventId:event.id,authorizationId:event.resource.id}});
       }else if(type==="PAYMENT.AUTHORIZATION.VOIDED"){
-        await markOrderStatus(orderId,"VOIDED","PAYPAL_WEBHOOK",event.id);
+        const authorization=event.resource?.id?await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:event.resource.id}}):null;
+        if(authorization&&authorization.paymentOrderId===order.id&&order.status==="AUTHORIZED"){
+          await prisma.paymentAuthorization.update({where:{id:authorization.id},data:{status:"VOIDED"}});
+          await markOrderStatus(orderId,"VOIDED","PAYPAL_WEBHOOK",event.id);
+        }
       }else if(type==="PAYMENT.CAPTURE.COMPLETED"){
         await markOrderStatus(orderId,"CAPTURED","PAYPAL_WEBHOOK",event.id);
         const capture=event.resource;
         if(capture?.id&&capture.amount?.value&&capture.amount.currency_code){
+          const authorizationId=typeof (capture as any).processor_response?.authorization_id==="string"?(capture as any).processor_response.authorization_id:undefined;
+          const authorization=authorizationId?await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:authorizationId}}):null;
           await prisma.paymentCapture.upsert({
             where:{paypalCaptureId:capture.id},
-            create:{paymentOrderId:order.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
-            update:{status:"COMPLETED"},
+            create:{paymentOrderId:order.id,authorizationId:authorization?.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
+            update:{status:"COMPLETED",authorizationId:authorization?.id},
           });
         }
       }else if(type==="PAYMENT.CAPTURE.PENDING"){
-        await markOrderStatus(orderId,"PENDING","PAYPAL_WEBHOOK",event.id);
+        if(order.status==="AUTHORIZED")await markOrderStatus(orderId,"PENDING","PAYPAL_WEBHOOK",event.id);
       }else if(type==="PAYMENT.CAPTURE.DENIED"){
-        await markOrderStatus(orderId,"FAILED","PAYPAL_WEBHOOK",event.id,"PayPal reports that the capture was denied.");
+        if(order.status==="AUTHORIZED"||order.status==="PENDING")await markOrderStatus(orderId,"FAILED","PAYPAL_WEBHOOK",event.id,"PayPal reports that the capture was denied.");
       }else if(type==="PAYMENT.CAPTURE.REFUNDED"){
         await audit({actorType:"PAYPAL_WEBHOOK",action:"CAPTURE_REFUNDED_EVENT",entityType:"PaymentOrder",entityId:order.id,outcome:"REFUNDED",metadata:{eventId:event.id}});
       }
