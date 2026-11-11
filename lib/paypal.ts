@@ -94,6 +94,7 @@ export async function createPayPalOrder(input: {
   const request = await prisma.agentRequest.findUnique({ where: { requestId: input.agentRequestId } });
   if (!request || request.agentId !== agent.id || !request.signatureValid || request.decision !== "ALLOW") throw new PayPalError("A verified request with an ALLOW decision is required.");
   if (!request.amount || !money(request.amount.toString()).eq(amount) || request.currency !== code) throw new PayPalError("PayPal order amount/currency must match the allowed request.");
+  const paypalPayeeId = process.env.PAYPAL_MERCHANT_ID || undefined;
   const order = await paypal<{ id: string; status: string; links?: { rel: string; href: string }[] }>("/v2/checkout/orders", {
     method: "POST",
     requestId: input.agentRequestId,
@@ -102,7 +103,7 @@ export async function createPayPalOrder(input: {
       purchase_units: [{
         reference_id: input.agentRequestId,
         custom_id: input.agentId,
-        payee: { merchant_id: input.merchantId },
+        ...(paypalPayeeId ? { payee: { merchant_id: paypalPayeeId } } : {}),
         amount: { currency_code: code, value: amount.toFixed(2) },
       }],
       payment_source: { paypal: { experience_context: {
@@ -114,7 +115,7 @@ export async function createPayPalOrder(input: {
   if (!approvalUrl) throw new PayPalError("PayPal order was created but the approval link was not returned.");
   const payment = await prisma.paymentOrder.create({ data: {
     agentId: input.agentId, agentRequestId: input.agentRequestId, paypalOrderId: order.id,
-    merchantId: input.merchantId, status: order.status === "APPROVED" ? "APPROVED" : "CREATED", amount, currency: code, approvalUrl,
+    merchantId: input.merchantId, paypalPayeeId, status: order.status === "APPROVED" ? "APPROVED" : "CREATED", amount, currency: code, approvalUrl,
   } });
   await prisma.paymentStateTransition.create({ data: {
     paymentOrderId: payment.id, toStatus: payment.status, source: "PAYPAL_CREATE", externalId: order.id,
@@ -156,7 +157,7 @@ export async function authorizePayPalOrder(orderId: string, merchantId: string) 
   const unit = approved.purchase_units?.[0];
   if (unit?.reference_id !== payment.agentRequestId || unit?.custom_id !== payment.agentId ||
       unit.amount?.currency_code !== payment.currency || !money(unit.amount.value).eq(payment.amount) ||
-      (unit.payee?.merchant_id && unit.payee.merchant_id !== merchantId)) {
+      (payment.paypalPayeeId && unit.payee?.merchant_id !== payment.paypalPayeeId)) {
     throw new PayPalError("PayPal order association, payee, amount, or currency does not match the gateway record.");
   }
   if (payment.status !== "APPROVED") await transition({ paymentOrderId: payment.id, to: "APPROVED", source: "BUYER_RETURN", externalId: orderId });
