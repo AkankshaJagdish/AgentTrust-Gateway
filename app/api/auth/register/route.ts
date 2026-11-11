@@ -1,0 +1,4 @@
+import { NextResponse } from "next/server";
+import { createAccount, signIn } from "@/lib/auth";
+import { audit } from "@/lib/audit";
+export async function POST(request:Request){try{const body=await request.json() as {email?:string;password?:string;name?:string};if(!body.email||!body.password)return NextResponse.json({error:"Email and password are required."},{status:400});const user=await createAccount(body.email,body.password,body.name);await signIn(body.email,body.password);await audit({userId:user.id,actorType:"USER",actorId:user.id,action:"ACCOUNT_CREATED",entityType:"User",entityId:user.id,outcome:"SUCCESS"});return NextResponse.json({id:user.id,email:user.email},{status:201});}catch(e){return NextResponse.json({error:e instanceof Error&&e.message.includes("Unique constraint")?"An account with this email already exists.":e instanceof Error?e.message:"Registration failed."},{status:400});}}
