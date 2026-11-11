@@ -12,7 +12,7 @@ function openai() {
   client ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   return client;
 }
-const model = () => process.env.OPENAI_MODEL || "gpt-5.6-mini";
+const model = () => process.env.OPENAI_MODEL || "gpt-6-luna";
 
 export async function draftPolicyFromNaturalLanguage(input: { description:string; currency:string; consentCap:string }) {
   const response = await openai().responses.parse({
