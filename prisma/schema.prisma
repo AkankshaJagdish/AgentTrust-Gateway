@@ -25,6 +25,7 @@ model User {
   policies SpendingPolicy[]
   auditLogs AuditLog[]
   captureApprovals CaptureApproval[]
+  policyDrafts PolicyDraft[]
 }
 model Agent {
   id String @id @default(cuid())
@@ -82,6 +83,10 @@ model SpendingPolicy {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   requests AgentRequest[]
+  version Int @default(1)
+  naturalLanguage String?
+  aiGenerated Boolean @default(false)
+  versions SpendingPolicyVersion[]
 }
 model AgentRequest {
   id String @id @default(cuid())
@@ -237,4 +242,31 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   @@index([expiresAt])
+}
+
+model PolicyDraft {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  consentId String
+  sourceText String
+  structuredPolicy String
+  riskAssessment String?
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([userId,expiresAt])
+}
+
+model SpendingPolicyVersion {
+  id String @id @default(cuid())
+  policyId String
+  policy SpendingPolicy @relation(fields:[policyId],references:[id],onDelete:Cascade)
+  version Int
+  snapshot String
+  sourceText String?
+  actorUserId String
+  createdAt DateTime @default(now())
+  @@unique([policyId,version])
+  @@index([policyId,createdAt])
 }
