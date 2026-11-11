@@ -18,7 +18,7 @@ export async function POST(request:Request){
   const consent=await prisma.consent.findFirst({where:{agentId:agent.id,userId:user.id,status:"ACTIVE",expiresAt:{gt:new Date()},currency:input.currency},orderBy:{createdAt:"desc"}});
   const policy=consent?await prisma.spendingPolicy.findFirst({where:{consentId:consent.id,userId:user.id,enabled:true,currency:input.currency,OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}]},orderBy:{createdAt:"desc"}}):null;
   const assessment=await assessTransactionRisk({
-   amount:input.amount,currency:input.currency,description:input.description,agentName:agent.name,agentStatus:agent.status,
+   amount:input.amount,currency:input.currency,description:input.description,agentName:agent.name,agentStatus:agent.expiresAt&&agent.expiresAt<=new Date()?"EXPIRED":agent.status,
    signatureVerified:latestRequest?.signatureValid??false,consentActive:!!consent,consentCap:consent?.spendingCap.toString()??null,
    policyMaxPerTx:policy?.maxPerTx.toString()??null,policyDailyCap:policy?.dailyCap.toString()??null,
    deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason
