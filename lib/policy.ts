@@ -2,6 +2,8 @@ import "server-only";
 import Decimal from "decimal.js";
 import { prisma } from "@/lib/prisma";
 import { currency, money } from "@/lib/money";
+import { isAboveApprovalThreshold } from "@/lib/policy-spec";
+import { isAgentExpired } from "@/lib/agent-expiry";
 
 export type PolicyInput = { agentId: string; amount: string; currency: string; requestId?: string };
 export type PolicyResult = { decision: "ALLOW" | "BLOCK" | "REQUIRE_APPROVAL"; reason: string; consentId?: string; policyId?: string };
@@ -12,6 +14,7 @@ export async function evaluatePolicy(input: PolicyInput): Promise<PolicyResult> 
   catch (error) { return { decision: "BLOCK", reason: error instanceof Error ? error.message : "Invalid amount or currency." }; }
   const agent = await prisma.agent.findUnique({ where: { id: input.agentId } });
   if (!agent || agent.status !== "ACTIVE") return { decision: "BLOCK", reason: "The agent is not active." };
+  if (isAgentExpired(agent.expiresAt)) return { decision: "BLOCK", reason: "The agent identity has expired." };
   const now = new Date();
   const consent = await prisma.consent.findFirst({
     where: { agentId: agent.id, status: "ACTIVE", expiresAt: { gt: now }, currency: code },
@@ -30,6 +33,6 @@ export async function evaluatePolicy(input: PolicyInput): Promise<PolicyResult> 
   });
   const used = new Decimal(spent._sum.amount?.toString() ?? "0");
   if (used.plus(amount).gt(policy.dailyCap)) return { decision: "BLOCK", reason: `This request would exceed the daily spending limit of ${policy.dailyCap.toFixed(2)} ${code}.`, consentId: consent.id, policyId: policy.id };
-  if (policy.requireApprovalAbove && amount.gte(policy.requireApprovalAbove)) return { decision: "REQUIRE_APPROVAL", reason: `Amounts at or above ${policy.requireApprovalAbove.toFixed(2)} ${code} require explicit merchant approval.`, consentId: consent.id, policyId: policy.id };
+  if (policy.requireApprovalAbove && isAboveApprovalThreshold(amount.toString(),policy.requireApprovalAbove.toString())) return { decision: "REQUIRE_APPROVAL", reason: `Amounts above ${policy.requireApprovalAbove.toFixed(2)} ${code} require explicit merchant approval.`, consentId: consent.id, policyId: policy.id };
   return { decision: "ALLOW", reason: `Agent is active, human consent is valid, and ${code} ${amount.toFixed(2)} is within transaction and daily limits.`, consentId: consent.id, policyId: policy.id };
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { isAgentExpired } from "@/lib/agent-expiry";
 
 export type AgentSignatureHeaders = { keyId?: string | null; timestamp?: string | null; nonce?: string | null; signature?: string | null };
 export type VerifiedAgent = { ok: true; agentId: string; requestId: string } | { ok: false; status: 403; reason: string; requestId: string };
@@ -35,6 +36,7 @@ export async function verifyAgentRequest(headers:AgentSignatureHeaders,method:st
   if(Math.abs(Date.now()-millis)>WINDOW_MS)return fail("Request timestamp is outside the five-minute acceptance window.");
   const credential=await prisma.agentCredential.findUnique({where:{keyId},include:{agent:true}});
   if(!credential||!credential.active||credential.revokedAt||credential.agent.status!=="ACTIVE")return fail("Agent credential is unknown, revoked, or inactive.");
+  if(isAgentExpired(credential.agent.expiresAt))return fail("Agent identity has expired.");
   // Registration stores SHA-256(secret), which is the derived HMAC key used by the client.
   const expected=signWithKey(Buffer.from(credential.secretHash,"hex"),method,path,timestamp,nonce,body);
   if(!verifySignature(expected,signature))return fail("Agent signature is invalid.");
