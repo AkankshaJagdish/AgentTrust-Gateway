@@ -6,7 +6,7 @@ type Agent={id:string;name:string;status:string};
 type Policy={id:string;name:string;maxPerTx:string;dailyCap:string;currency:string;requireApprovalAbove:string|null;enabled:boolean;version:number;aiGenerated:boolean;consent?:{agent?:{name:string}}};
 type Draft={draftId:string;policy:{name:string;summary:string;currency:string;maxPerTx:string|null;dailyCap:string|null;requireApprovalAbove:string|null;requireVerifiedAgents:true;blockExpiredAgents:true;clarifications:string[]};canActivate:boolean;validationError:string|null;expiresAt:string;consent:{agentName:string;currency:string;spendingCap:string}};
 type Risk={level:"LOW"|"MEDIUM"|"HIGH";summary:string;factors:{label:string;impact:string;explanation:string}[];missingInformation:string[];recommendation:string};
-const money=(v:string|null|undefined)=>v?Number(v).toLocaleString("en-US",{style:"currency",currency:"USD"}):"Not specified";
+const money=(v:string|null|undefined,currency="USD")=>v?Number(v).toLocaleString("en-US",{style:"currency",currency}):"Not specified";
 export function PolicyAssistant({onChanged}:{onChanged?:()=>void}){
  const [consents,setConsents]=useState<Consent[]>([]),[agents,setAgents]=useState<Agent[]>([]),[policies,setPolicies]=useState<Policy[]>([]);
  const [consentId,setConsentId]=useState(""),[description,setDescription]=useState("Allow verified agents to purchase up to $50 per transaction, with a maximum daily budget of $150. Require human approval for anything above $30. Block expired agents.");
@@ -42,7 +42,7 @@ export function PolicyAssistant({onChanged}:{onChanged?:()=>void}){
   {draft&&<div style={{marginTop:18,borderTop:"1px solid #e9edf3",paddingTop:16}}>
    <div className="panel-head"><div><div className="panel-title">Policy preview · {draft.consent.agentName}</div><div className="panel-meta">Expires {new Date(draft.expiresAt).toLocaleTimeString()}</div></div><span className="pill" style={{background:draft.canActivate?"#eaf6f0":"#fff6e7",color:draft.canActivate?"#13734e":"#9d6917"}}>{draft.canActivate?"Ready for confirmation":"Needs clarification"}</span></div>
    <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:10}}>
-    <Metric label="Per transaction" value={money(draft.policy.maxPerTx)}/><Metric label="Daily budget" value={money(draft.policy.dailyCap)}/><Metric label="Human approval above" value={money(draft.policy.requireApprovalAbove)}/>
+    <Metric label="Per transaction" value={money(draft.policy.maxPerTx,draft.policy.currency)}/><Metric label="Daily budget" value={money(draft.policy.dailyCap,draft.policy.currency)}/><Metric label="Human approval above" value={money(draft.policy.requireApprovalAbove,draft.policy.currency)}/>
    </div>
    <p style={{fontSize:12,lineHeight:1.6,color:"#56647a"}}>{draft.policy.summary}</p>
    <pre style={{whiteSpace:"pre-wrap",overflowX:"auto",background:"#111e35",color:"#dce7fb",padding:14,borderRadius:8,fontSize:11,lineHeight:1.5}}>{JSON.stringify(draft.policy,null,2)}</pre>
