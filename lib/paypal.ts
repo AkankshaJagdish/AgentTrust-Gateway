@@ -186,7 +186,7 @@ export async function createCaptureApproval(input: {
   const amount = money(input.amount), code = normalizeCurrency(input.currency), key = randomUUID();
   const [order, authorization, request] = await Promise.all([
     prisma.paymentOrder.findUnique({ where: { id: input.orderId }, include: { agent: true } }),
-    prisma.paymentAuthorization.findUnique({ where: { id: input.authorizationId } }),
+    prisma.paymentAuthorization.findUnique({ where: { paypalAuthorizationId: input.authorizationId } }),
     prisma.agentRequest.findFirst({ where: { order: { id: input.orderId } } }),
   ]);
   if (!order || !authorization || authorization.paymentOrderId !== order.id || !request) throw new PayPalError("Order/authorization association is invalid.");
