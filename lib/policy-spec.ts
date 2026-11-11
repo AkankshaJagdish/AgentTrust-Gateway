@@ -26,3 +26,7 @@ export function validatePolicySpec(spec:PolicySpec,consent:{currency:string;spen
  if(spec.requireApprovalAbove!==null){threshold=money(spec.requireApprovalAbove);if(!threshold.gt(0)||threshold.gt(maxPerTx))throw new Error("The human approval threshold must be positive and no greater than the per-transaction limit.");}
  return {currency:code,maxPerTx,dailyCap,requireApprovalAbove:threshold};
 }
+
+export function isAboveApprovalThreshold(amount:string,threshold:string) {
+ return money(amount).gt(money(threshold));
+}
