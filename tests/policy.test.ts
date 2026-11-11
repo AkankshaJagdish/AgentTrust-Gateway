@@ -1,2 +1,13 @@
-import {describe,expect,it} from "vitest";import Decimal from "decimal.js";import {money} from "@/lib/money";
-describe("policy money boundaries",()=>{it("allows amount at consent cap",()=>expect(money("10.00").gt(money("10.00"))).toBe(false));it("blocks above cap",()=>expect(money("10.01").gt(money("10.00"))).toBe(true));it("requires approval at threshold equality",()=>expect(money("25.00").gte(money("25.00"))).toBe(true));it("aggregates currency exactly",()=>expect(new Decimal("0.10").plus("0.20").toFixed(2)).toBe("0.30"));});
+import {describe,expect,it} from "vitest";
+import Decimal from "decimal.js";
+import {money} from "@/lib/money";
+import {isAboveApprovalThreshold} from "@/lib/policy-spec";
+describe("deterministic policy money boundaries",()=>{
+ it("allows amount at consent cap",()=>expect(money("10.00").gt(money("10.00"))).toBe(false));
+ it("blocks above cap",()=>expect(money("10.01").gt(money("10.00"))).toBe(true));
+ it("requires approval only above threshold, not at equality",()=>{
+  expect(isAboveApprovalThreshold("25.00","25.00")).toBe(false);
+  expect(isAboveApprovalThreshold("25.01","25.00")).toBe(true);
+ });
+ it("aggregates currency exactly",()=>expect(new Decimal("0.10").plus("0.20").toFixed(2)).toBe("0.30"));
+});
