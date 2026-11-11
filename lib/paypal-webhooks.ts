@@ -119,7 +119,6 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
           await markOrderStatus(orderId,"VOIDED","PAYPAL_WEBHOOK",event.id);
         }
       }else if(type==="PAYMENT.CAPTURE.COMPLETED"){
-        await markOrderStatus(orderId,"CAPTURED","PAYPAL_WEBHOOK",event.id);
         const capture=event.resource;
         if(capture?.id&&capture.amount?.value&&capture.amount.currency_code){
           const authorizationId=typeof (capture as any).processor_response?.authorization_id==="string"?(capture as any).processor_response.authorization_id:undefined;
@@ -129,6 +128,11 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
             create:{paymentOrderId:order.id,authorizationId:authorization?.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
             update:{status:"COMPLETED",authorizationId:authorization?.id},
           });
+        }
+        if(order.status==="AUTHORIZED"||order.status==="PENDING")await markOrderStatus(orderId,"CAPTURED","PAYPAL_WEBHOOK",event.id);
+        if(order.status==="AUTHORIZED"||order.status==="PENDING"){
+          const auth=await prisma.paymentAuthorization.findFirst({where:{paymentOrderId:order.id},orderBy:{createdAt:"desc"}});
+          if(auth&&auth.status!=="CAPTURED")await prisma.paymentAuthorization.update({where:{id:auth.id},data:{status:"CAPTURED"}});
         }
       }else if(type==="PAYMENT.CAPTURE.PENDING"){
         if(order.status==="AUTHORIZED")await markOrderStatus(orderId,"PENDING","PAYPAL_WEBHOOK",event.id);
