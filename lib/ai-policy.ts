@@ -1,31 +1,9 @@
 import "server-only";
 import OpenAI from "openai";
-import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import Decimal from "decimal.js";
-import { currency, money } from "@/lib/money";
-
-export const PolicySpecSchema = z.object({
-  name: z.string(),
-  summary: z.string(),
-  currency: z.string(),
-  maxPerTx: z.string().nullable(),
-  dailyCap: z.string().nullable(),
-  requireApprovalAbove: z.string().nullable(),
-  requireVerifiedAgents: z.literal(true),
-  blockExpiredAgents: z.literal(true),
-  clarifications: z.array(z.string()),
-});
-export type PolicySpec = z.infer<typeof PolicySpecSchema>;
-
-export const RiskAssessmentSchema = z.object({
-  level: z.enum(["LOW","MEDIUM","HIGH"]),
-  summary: z.string(),
-  factors: z.array(z.object({ label:z.string(), impact:z.enum(["LOW","MEDIUM","HIGH"]), explanation:z.string() })),
-  missingInformation: z.array(z.string()),
-  recommendation: z.enum(["NO_ADDITIONAL_REVIEW","REVIEW"]),
-});
-export type RiskAssessment = z.infer<typeof RiskAssessmentSchema>;
+import { PolicySpecSchema,PolicySpec,RiskAssessmentSchema,RiskAssessment } from "@/lib/policy-spec";
+export { PolicySpecSchema,RiskAssessmentSchema,validatePolicySpec } from "@/lib/policy-spec";
+export type { PolicySpec,RiskAssessment } from "@/lib/policy-spec";
 
 let client: OpenAI | null = null;
 function openai() {
