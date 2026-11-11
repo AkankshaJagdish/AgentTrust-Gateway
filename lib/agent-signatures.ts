@@ -9,8 +9,11 @@ const WINDOW_MS = 5 * 60 * 1000;
 const payload = (method:string,path:string,timestamp:string,nonce:string,body:string) =>
   [method.toUpperCase(),path,timestamp,nonce,createHash("sha256").update(body).digest("hex")].join("\n");
 export function deriveAgentHmacKey(secret:string) { return createHash("sha256").update(secret).digest(); }
+function signWithKey(key:Buffer,method:string,path:string,timestamp:string,nonce:string,body:string) {
+  return createHmac("sha256",key).update(payload(method,path,timestamp,nonce,body)).digest("hex");
+}
 export function signAgentRequest(secret:string,method:string,path:string,timestamp:string,nonce:string,body:string) {
-  return createHmac("sha256",deriveAgentHmacKey(secret)).update(payload(method,path,timestamp,nonce,body)).digest("hex");
+  return signWithKey(deriveAgentHmacKey(secret),method,path,timestamp,nonce,body);
 }
 export function verifySignature(expected:string,supplied:string) {
   if(!/^[a-f0-9]{64}$/i.test(supplied))return false;
@@ -32,7 +35,8 @@ export async function verifyAgentRequest(headers:AgentSignatureHeaders,method:st
   if(Math.abs(Date.now()-millis)>WINDOW_MS)return fail("Request timestamp is outside the five-minute acceptance window.");
   const credential=await prisma.agentCredential.findUnique({where:{keyId},include:{agent:true}});
   if(!credential||!credential.active||credential.revokedAt||credential.agent.status!=="ACTIVE")return fail("Agent credential is unknown, revoked, or inactive.");
-  const expected=signAgentRequest(credential.secretHash,method,path,timestamp,nonce,body);
+  // Registration stores SHA-256(secret), which is the derived HMAC key used by the client.
+  const expected=signWithKey(Buffer.from(credential.secretHash,"hex"),method,path,timestamp,nonce,body);
   if(!verifySignature(expected,signature))return fail("Agent signature is invalid.");
   try{await prisma.usedNonce.create({data:{agentId:credential.agentId,nonce,expiresAt:new Date(millis+WINDOW_MS)}});}
   catch{return fail("Replay detected: this nonce has already been used.");}
