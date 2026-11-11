@@ -8,10 +8,11 @@ export type VerifiedAgent = { ok: true; agentId: string; requestId: string } | {
 const WINDOW_MS = 5 * 60 * 1000;
 const payload = (method:string,path:string,timestamp:string,nonce:string,body:string) =>
   [method.toUpperCase(),path,timestamp,nonce,createHash("sha256").update(body).digest("hex")].join("\n");
+export function deriveAgentHmacKey(secret:string) { return createHash("sha256").update(secret).digest(); }
 export function signAgentRequest(secret:string,method:string,path:string,timestamp:string,nonce:string,body:string) {
-  return createHmac("sha256",secret).update(payload(method,path,timestamp,nonce,body)).digest("hex");
+  return createHmac("sha256",deriveAgentHmacKey(secret)).update(payload(method,path,timestamp,nonce,body)).digest("hex");
 }
-export function verifySignature(secret:string,expected:string,supplied:string) {
+export function verifySignature(expected:string,supplied:string) {
   if(!/^[a-f0-9]{64}$/i.test(supplied))return false;
   const a=Buffer.from(expected,"hex"),b=Buffer.from(supplied,"hex");
   return a.length===b.length&&timingSafeEqual(a,b);
@@ -32,7 +33,7 @@ export async function verifyAgentRequest(headers:AgentSignatureHeaders,method:st
   const credential=await prisma.agentCredential.findUnique({where:{keyId},include:{agent:true}});
   if(!credential||!credential.active||credential.revokedAt||credential.agent.status!=="ACTIVE")return fail("Agent credential is unknown, revoked, or inactive.");
   const expected=signAgentRequest(credential.secretHash,method,path,timestamp,nonce,body);
-  if(!verifySignature(credential.secretHash,expected,signature))return fail("Agent signature is invalid.");
+  if(!verifySignature(expected,signature))return fail("Agent signature is invalid.");
   try{await prisma.usedNonce.create({data:{agentId:credential.agentId,nonce,expiresAt:new Date(millis+WINDOW_MS)}});}
   catch{return fail("Replay detected: this nonce has already been used.");}
   await prisma.agentRequest.create({data:{requestId,agentId:credential.agentId,nonce,timestamp:new Date(millis),signatureValid:true,status:"VERIFIED"}});
