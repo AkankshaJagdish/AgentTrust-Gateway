@@ -5,7 +5,7 @@ import { currency,money } from "@/lib/money";
 export const PolicySpecSchema=z.object({
  name:z.string().min(2).max(80),summary:z.string().min(1),currency:z.string().length(3),
  maxPerTx:z.string().nullable(),dailyCap:z.string().nullable(),requireApprovalAbove:z.string().nullable(),
- requireVerifiedAgents:z.literal(true),blockExpiredAgents:z.literal(true),clarifications:z.array(z.string())
+ requireVerifiedAgents:z.boolean(),blockExpiredAgents:z.boolean(),clarifications:z.array(z.string())
 });
 export type PolicySpec=z.infer<typeof PolicySpecSchema>;
 export const RiskAssessmentSchema=z.object({
