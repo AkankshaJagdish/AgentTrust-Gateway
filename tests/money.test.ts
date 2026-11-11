@@ -1,0 +1,2 @@
+import {describe,expect,it} from "vitest";import {currency,money} from "@/lib/money";
+describe("decimal-safe money",()=>{it("rounds to two decimals",()=>expect(money("12.345").toFixed(2)).toBe("12.35"));it("adds exact cents",()=>expect(money("0.10").plus(money("0.20")).toFixed(2)).toBe("0.30"));it("rejects negative values",()=>expect(()=>money("-1")).toThrow());it("rejects invalid currency",()=>expect(()=>currency("US")).toThrow());});
