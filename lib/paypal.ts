@@ -142,7 +142,7 @@ export async function authorizePayPalOrder(orderId: string, merchantId: string) 
     if (!existing) throw new PayPalError("Authorized payment is missing its stored authorization ID.");
     return existing;
   }
-  if (payment.status !== "APPROVED") throw new PayPalError("Buyer approval must be confirmed by PayPal before authorizing the order.");
+  if (payment.status !== "APPROVED" && payment.status !== "CREATED") throw new PayPalError("Payment order is not eligible for authorization.");
   const agent = await prisma.agent.findUnique({ where: { id: payment.agentId } });
   if (!agent || agent.status !== "ACTIVE" || agent.userId !== merchantId) throw new PayPalError("Agent identity is no longer active or merchant-linked.");
   const consent = await prisma.consent.findFirst({ where: {
@@ -159,7 +159,7 @@ export async function authorizePayPalOrder(orderId: string, merchantId: string) 
       (unit.payee?.merchant_id && unit.payee.merchant_id !== merchantId)) {
     throw new PayPalError("PayPal order association, payee, amount, or currency does not match the gateway record.");
   }
-  if (payment.status !== "APPROVED") await transition({ paymentOrderId: payment.id, to: "APPROVED", source: "BUYER_RETURN", externalId: orderId });
+  if (payment.status === "CREATED") await transition({ paymentOrderId: payment.id, to: "APPROVED", source: "BUYER_RETURN", externalId: orderId });
   const data = await paypal<PayPalOrderDetails>(`/v2/checkout/orders/${encodeURIComponent(orderId)}/authorize`, {
     method: "POST", requestId: `authorize-${payment.agentRequestId}`, body: {},
   });
@@ -226,8 +226,8 @@ export async function captureWithApproval(input: { approvalId: string; userId: s
   const request = order.agentRequest;
   if (!consent || !policy || !request.signatureValid || request.decision !== "ALLOW") throw new PayPalError("Consent, policy, or signed agent request is no longer valid.");
   if (order.status !== "AUTHORIZED" || authorization.paymentOrderId !== order.id ||
-      !authorization.paypalAuthorizationId || !money(approval.approvedAmount).eq(order.amount) ||
-      !money(approval.approvedAmount).eq(authorization.amount) ||
+      !authorization.paypalAuthorizationId || !money(approval.approvedAmount.toString()).eq(order.amount) ||
+      !money(approval.approvedAmount.toString()).eq(authorization.amount) ||
       approval.currency !== order.currency || authorization.currency !== order.currency ||
       approval.merchantId !== order.merchantId || request.agentId !== agent.id ||
       request.amount === null || !money(request.amount.toString()).eq(approval.approvedAmount)) {
