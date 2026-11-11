@@ -114,6 +114,7 @@ model PaymentOrder {
   agentRequest AgentRequest @relation(fields:[agentRequestId],references:[requestId],onDelete:Restrict)
   paypalOrderId String? @unique
   merchantId String
+  paypalPayeeId String?
   status PaymentStatus @default(CREATED)
   amount Decimal @db.Decimal(18,2)
   currency String
