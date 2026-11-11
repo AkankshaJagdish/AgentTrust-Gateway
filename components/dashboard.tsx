@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ShieldCheck, Activity, Wallet, Users, LockKeyhole, Plus, RefreshCw, LogOut, ChevronRight, CircleDollarSign, FileCheck2, Radio, ScrollText } from "lucide-react";
 import { AgentGrid } from "@/components/agent-grid";
+import { PolicyAssistant } from "@/components/policy-assistant";
 type Data={agents:any[];consents:any[];policies:any[];requests:any[];orders:any[];audits:any[];stats:{agents:number;verified:number;blocked:number;orders:number;capturedValue:string}};
 type Modal="agent"|"consent"|"policy"|null;
 const money=(v:string|number)=>Number(v||0).toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2});
@@ -21,6 +22,7 @@ export function Dashboard({email}:{email:string}) {
  <main className="main"><header className="topbar"><div className="crumb">Merchant console <ChevronRight size={13} style={{display:"inline",verticalAlign:"-2px"}}/> Overview</div><div className="profile"><span className="pill green">SANDBOX MODE</span><span className="avatar">{email[0]?.toUpperCase()}</span><span>{email}</span><button onClick={logout} className="btn secondary" style={{padding:"7px 9px"}} title="Sign out"><LogOut size={14}/></button></div></header>
  <div className="content" id="overview"><div className="page-head"><div><div className="eyebrow">Trust & risk operations</div><h1>Merchant overview</h1><div className="subtitle">Monitor agent identity, human consent, policy outcomes and PayPal payment activity.</div></div><div style={{display:"flex",gap:9}}><button className="btn secondary" onClick={()=>load()}><RefreshCw size={14} style={{display:"inline",marginRight:6,verticalAlign:"-2px"}}/>Refresh</button><button className="btn" onClick={()=>setModal("agent")}><Plus size={15} style={{display:"inline",marginRight:5,verticalAlign:"-2px"}}/>Register agent</button></div></div>
  {message&&<div className="notice">{message}</div>}{secret&&<div className="panel"><div className="panel-head"><div className="panel-title">Agent credential — shown once</div><button className="btn secondary" onClick={()=>setSecret("")}>Dismiss</button></div><pre style={{whiteSpace:"pre-wrap",fontSize:12}}>{secret}</pre><button className="btn secondary" onClick={()=>navigator.clipboard.writeText(secret)}>Copy credential</button></div>}
+ <PolicyAssistant onChanged={()=>void load()}/>
  <div className="cards">
  <div className="metric"><div className="metric-label"><Users size={13} style={{display:"inline",marginRight:5,verticalAlign:"-2px"}}/>Registered agents</div><div className="metric-value">{loading?"—":data.stats.agents}</div><div className="metric-foot">Merchant-linked identities</div></div>
  <div className="metric"><div className="metric-label"><ShieldCheck size={13} style={{display:"inline",marginRight:5,verticalAlign:"-2px"}}/>Verified requests</div><div className="metric-value">{loading?"—":data.stats.verified}</div><div className="metric-foot">Valid signed requests</div></div>
