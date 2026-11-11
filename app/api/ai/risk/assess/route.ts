@@ -18,12 +18,13 @@ export async function POST(request:Request){
   const latestRequest=await prisma.agentRequest.findFirst({where:{agentId:agent.id},orderBy:{createdAt:"desc"}});
   const consent=await prisma.consent.findFirst({where:{agentId:agent.id,userId:user.id,status:"ACTIVE",expiresAt:{gt:new Date()},currency:input.currency},orderBy:{createdAt:"desc"}});
   const policy=consent?await prisma.spendingPolicy.findFirst({where:{consentId:consent.id,userId:user.id,enabled:true,currency:input.currency,OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}]},orderBy:{createdAt:"desc"}}):null;
-  const assessment=await assessTransactionRisk({
+  const aiAssessment=await assessTransactionRisk({
    amount:input.amount,currency:input.currency,description:input.description,agentName:agent.name,agentStatus:isAgentExpired(agent.expiresAt)?"EXPIRED":agent.status,
    latestStoredRequestSignatureVerified:latestRequest?.signatureValid??false,consentActive:!!consent,consentCap:consent?.spendingCap.toString()??null,
    policyMaxPerTx:policy?.maxPerTx.toString()??null,policyDailyCap:policy?.dailyCap.toString()??null,
    deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason
   });
+  const assessment=evaluation.decision==="ALLOW"?aiAssessment:{...aiAssessment,recommendation:"REVIEW" as const};
   await audit({userId:user.id,actorType:"AI",actorId:"openai",action:"AI_TRANSACTION_RISK_ASSESSED",entityType:"Agent",entityId:agent.id,outcome:assessment.level,reason:assessment.summary,metadata:{deterministicDecision:evaluation.decision,amount:input.amount,currency:input.currency,assessment}});
   return NextResponse.json({assessment,deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason,advisoryOnly:true});
  }catch(e){const message=e instanceof Error?e.message:"Unable to assess transaction risk.";return NextResponse.json({error:message},{status:message.includes("OPENAI_API_KEY")?503:400});}
