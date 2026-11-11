@@ -242,6 +242,13 @@ export async function captureWithApproval(input: { approvalId: string; userId: s
     throw new PayPalError("Capture preconditions (order association, amount, currency, or merchant) failed.");
   }
   if (approval.approvedAmount.gt(consent.spendingCap) || approval.approvedAmount.gt(policy.maxPerTx)) throw new PayPalError("The capture amount exceeds the current spending caps.");
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const daily = await prisma.agentRequest.aggregate({
+    where: { agentId: agent.id, decision: "ALLOW", currency: approval.currency, createdAt: { gte: dayStart } },
+    _sum: { amount: true },
+  });
+  const dailyTotal = new Decimal(daily._sum.amount?.toString() ?? "0");
+  if (dailyTotal.gt(policy.dailyCap)) throw new PayPalError("The current UTC-day approved request total exceeds the active daily policy cap.");
   const idem = `capture-${approval.idempotencyKey}`;
   const claimed = await prisma.captureApproval.updateMany({ where: { id: approval.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
   if (claimed.count !== 1) throw new PayPalError("Capture approval was already consumed or expired.");
