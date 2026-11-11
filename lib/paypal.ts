@@ -244,7 +244,8 @@ export async function captureWithApproval(input: { approvalId: string; userId: s
       { method: "POST", requestId: idem, body: { final_capture: true } },
     );
   } catch (error) {
-    await prisma.captureApproval.update({ where: { id: approval.id }, data: { consumedAt: null } }).catch(() => undefined);
+    // A timeout is ambiguous: keep approval consumed so an operator must reconcile PayPal
+    // before any fresh approval can retry the state-changing request with a new key.
     throw error;
   }
   if (capture.amount.currency_code !== order.currency || !money(capture.amount.value).eq(approval.approvedAmount)) throw new PayPalError("PayPal capture response amount/currency does not match capture approval.");
