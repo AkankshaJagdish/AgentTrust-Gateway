@@ -1,19 +1,218 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "sqlite" url = env("DATABASE_URL") }
-enum AgentStatus { ACTIVE SUSPENDED REVOKED }
-enum ConsentStatus { ACTIVE REVOKED EXPIRED }
-enum PolicyDecision { ALLOW BLOCK REQUIRE_APPROVAL }
-enum RequestStatus { VERIFIED REJECTED EVALUATED }
-enum PaymentStatus { CREATED APPROVED AUTHORIZED CAPTURED VOIDED FAILED PENDING }
-model User { id String @id @default(cuid()) email String @unique name String? passwordHash String createdAt DateTime @default(now()) updatedAt DateTime @updatedAt agents Agent[] consents Consent[] policies SpendingPolicy[] auditLogs AuditLog[] }
-model Agent { id String @id @default(cuid()) name String status AgentStatus @default(ACTIVE) userId String? user User? @relation(fields:[userId],references:[id],onDelete:SetNull) credentials AgentCredential[] requests AgentRequest[] consents Consent[] orders PaymentOrder[] createdAt DateTime @default(now()) updatedAt DateTime @updatedAt }
-model AgentCredential { id String @id @default(cuid()) agentId String agent Agent @relation(fields:[agentId],references:[id],onDelete:Cascade) keyId String @unique secretHash String algorithm String @default("HMAC-SHA256") active Boolean @default(true) createdAt DateTime @default(now()) revokedAt DateTime? }
-model Consent { id String @id @default(cuid()) userId String user User @relation(fields:[userId],references:[id],onDelete:Cascade) agentId String agent Agent @relation(fields:[agentId],references:[id],onDelete:Cascade) status ConsentStatus @default(ACTIVE) spendingCap Decimal @db.Decimal(18,2) currency String @default("USD") expiresAt DateTime createdAt DateTime @default(now()) revokedAt DateTime? policies SpendingPolicy[] requests AgentRequest[] @@index([userId,agentId,status]) }
-model SpendingPolicy { id String @id @default(cuid()) userId String user User @relation(fields:[userId],references:[id],onDelete:Cascade) consentId String? consent Consent? @relation(fields:[consentId],references:[id],onDelete:SetNull) name String maxPerTx Decimal @db.Decimal(18,2) dailyCap Decimal @db.Decimal(18,2) currency String @default("USD") requireApprovalAbove Decimal? @db.Decimal(18,2) enabled Boolean @default(true) expiresAt DateTime? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt requests AgentRequest[] }
-model AgentRequest { id String @id @default(cuid()) agentId String? agent Agent? @relation(fields:[agentId],references:[id],onDelete:SetNull) consentId String? consent Consent? @relation(fields:[consentId],references:[id],onDelete:SetNull) policyId String? policy SpendingPolicy? @relation(fields:[policyId],references:[id],onDelete:SetNull) requestId String @unique nonce String? timestamp DateTime? signatureValid Boolean @default(false) status RequestStatus @default(REJECTED) amount Decimal? @db.Decimal(18,2) currency String? decision PolicyDecision? reason String? ipAddress String? createdAt DateTime @default(now()) order PaymentOrder? @@index([agentId,createdAt]) @@index([decision,createdAt]) }
-model PaymentOrder { id String @id @default(cuid()) agentId String agent Agent @relation(fields:[agentId],references:[id],onDelete:Restrict) agentRequestId String @unique agentRequest AgentRequest @relation(fields:[agentRequestId],references:[id],onDelete:Restrict) paypalOrderId String? @unique status PaymentStatus @default(CREATED) amount Decimal @db.Decimal(18,2) currency String approvalUrl String? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt authorizations PaymentAuthorization[] captures PaymentCapture[] }
-model PaymentAuthorization { id String @id @default(cuid()) paymentOrderId String paymentOrder PaymentOrder @relation(fields:[paymentOrderId],references:[id],onDelete:Cascade) paypalAuthorizationId String @unique status String amount Decimal @db.Decimal(18,2) createdAt DateTime @default(now()) }
-model PaymentCapture { id String @id @default(cuid()) paymentOrderId String paymentOrder PaymentOrder @relation(fields:[paymentOrderId],references:[id],onDelete:Cascade) paypalCaptureId String @unique status String amount Decimal @db.Decimal(18,2) createdAt DateTime @default(now()) }
-model AuditLog { id String @id @default(cuid()) userId String? user User? @relation(fields:[userId],references:[id],onDelete:SetNull) actorType String actorId String? action String entityType String entityId String? outcome String reason String? metadata String? createdAt DateTime @default(now()) @@index([createdAt]) @@index([entityType,entityId]) }
-model UsedNonce { id String @id @default(cuid()) agentId String nonce String expiresAt DateTime createdAt DateTime @default(now()) @@unique([agentId,nonce]) @@index([expiresAt]) }
-model Session { id String @id @default(cuid()) tokenHash String @unique userId String expiresAt DateTime createdAt DateTime @default(now()) @@index([expiresAt]) }
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum PolicyDecision {
+  ALLOW
+  BLOCK
+  REQUIRE_APPROVAL
+}
+
+enum RequestStatus {
+  VERIFIED
+  REJECTED
+  EVALUATED
+}
+
+enum PaymentStatus {
+  CREATED
+  APPROVED
+  AUTHORIZED
+  CAPTURED
+  VOIDED
+  FAILED
+  PENDING
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  agents       Agent[]
+  consents     Consent[]
+  policies     SpendingPolicy[]
+  auditLogs    AuditLog[]
+}
+
+model Agent {
+  id          String            @id @default(cuid())
+  name        String
+  status      AgentStatus       @default(ACTIVE)
+  userId      String?
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  credentials AgentCredential[]
+  requests    AgentRequest[]
+  consents    Consent[]
+  orders      PaymentOrder[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model AgentCredential {
+  id         String   @id @default(cuid())
+  agentId    String
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  keyId      String   @unique
+  secretHash String
+  algorithm  String   @default("HMAC-SHA256")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+}
+
+model Consent {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentId     String
+  agent       Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  status      ConsentStatus @default(ACTIVE)
+  spendingCap Decimal       @db.Decimal(18, 2)
+  currency    String        @default("USD")
+  expiresAt   DateTime
+  createdAt   DateTime      @default(now())
+  revokedAt   DateTime?
+  policies    SpendingPolicy[]
+  requests    AgentRequest[]
+
+  @@index([userId, agentId, status])
+}
+
+model SpendingPolicy {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consentId            String?
+  consent              Consent? @relation(fields: [consentId], references: [id], onDelete: SetNull)
+  name                 String
+  maxPerTx             Decimal  @db.Decimal(18, 2)
+  dailyCap             Decimal  @db.Decimal(18, 2)
+  currency             String   @default("USD")
+  requireApprovalAbove Decimal? @db.Decimal(18, 2)
+  enabled              Boolean  @default(true)
+  expiresAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  requests             AgentRequest[]
+}
+
+model AgentRequest {
+  id             String          @id @default(cuid())
+  agentId        String?
+  agent          Agent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  consentId      String?
+  consent        Consent?        @relation(fields: [consentId], references: [id], onDelete: SetNull)
+  policyId       String?
+  policy         SpendingPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  requestId      String          @unique
+  nonce          String?
+  timestamp      DateTime?
+  signatureValid Boolean         @default(false)
+  status         RequestStatus   @default(REJECTED)
+  amount         Decimal?        @db.Decimal(18, 2)
+  currency       String?
+  decision       PolicyDecision?
+  reason         String?
+  ipAddress      String?
+  createdAt      DateTime        @default(now())
+  order          PaymentOrder?
+
+  @@index([agentId, createdAt])
+  @@index([decision, createdAt])
+}
+
+model PaymentOrder {
+  id             String           @id @default(cuid())
+  agentId        String
+  agent          Agent            @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  agentRequestId String           @unique
+  agentRequest   AgentRequest     @relation(fields: [agentRequestId], references: [requestId], onDelete: Restrict)
+  paypalOrderId  String?          @unique
+  status         PaymentStatus    @default(CREATED)
+  amount         Decimal          @db.Decimal(18, 2)
+  currency       String
+  approvalUrl    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  authorizations PaymentAuthorization[]
+  captures       PaymentCapture[]
+}
+
+model PaymentAuthorization {
+  id                     String      @id @default(cuid())
+  paymentOrderId         String
+  paymentOrder           PaymentOrder @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  paypalAuthorizationId  String      @unique
+  status                 String
+  amount                 Decimal     @db.Decimal(18, 2)
+  createdAt              DateTime    @default(now())
+}
+
+model PaymentCapture {
+  id              String      @id @default(cuid())
+  paymentOrderId  String
+  paymentOrder    PaymentOrder @relation(fields: [paymentOrderId], references: [id], onDelete: Cascade)
+  paypalCaptureId String      @unique
+  status          String
+  amount          Decimal     @db.Decimal(18, 2)
+  createdAt       DateTime    @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorType  String
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  outcome    String
+  reason     String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+model UsedNonce {
+  id        String   @id @default(cuid())
+  agentId   String
+  nonce     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, nonce])
+  @@index([expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+}
