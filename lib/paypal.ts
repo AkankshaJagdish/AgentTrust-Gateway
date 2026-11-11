@@ -267,6 +267,7 @@ export async function voidAuthorization(orderId: string, authorizationId: string
   const order = await prisma.paymentOrder.findUnique({ where: { paypalOrderId: orderId }, include: { authorizations: true, agent: true } });
   const auth = await prisma.paymentAuthorization.findUnique({ where: { paypalAuthorizationId: authorizationId } });
   if (!order || !auth || auth.paymentOrderId !== order.id || order.merchantId !== merchantId) throw new PayPalError("Authorization does not belong to this merchant/order.");
+  if (order.status === "VOIDED" && auth.status === "VOIDED") return { status: "VOIDED" };
   if (order.status !== "AUTHORIZED" || !["CREATED", "AUTHORIZED"].includes(auth.status)) throw new PayPalError("Only an active uncaptured authorization can be voided.");
   await paypal(`/v2/payments/authorizations/${encodeURIComponent(authorizationId)}/void`, { method: "POST", requestId: `void-${authorizationId}`, body: {} });
   await prisma.$transaction(async tx => {
