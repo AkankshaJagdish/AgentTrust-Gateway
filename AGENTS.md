@@ -1,22 +1,23 @@
-# AgentTrust Gateway — engineering instructions
+# AgentTrust Gateway — engineering rules
 
 ## Product invariants
-- Preserve the AgentTrust Gateway concept: merchant-side agent identity verification, human-linked spending consent, deterministic policy enforcement, and merchant operations console.
-- Do not allow the LLM to authorize, capture, refund, or otherwise move money. AI may explain or draft policy suggestions only; deterministic TypeScript code is authoritative.
-- Never invent PayPal identity assertions or imply PayPal Identity / Log in with PayPal is verified unless a real, configured flow and verified token validation are present.
-- Sandbox only by default. Never expose or log credentials, bearer tokens, signing secrets, session cookies, or raw payment credentials.
-- Reject unsigned, malformed, stale, replayed, unknown, and inactive agent requests with HTTP 403.
-- Store currency values as decimal strings / Prisma Decimal. Never use JS floating point for policy comparisons.
-- Any payment operation requires a fresh server-side policy evaluation. Persist decision and audit record before creating/advancing a PayPal order.
-- Treat external agent inputs, AI output, and PayPal responses as untrusted data.
+- Preserve AgentTrust Gateway: merchant-side agent identity verification, human-linked spending consent, deterministic policy enforcement, and merchant operations command center.
+- Do not replace the product with a buyer storefront, chatbot, or generic dashboard.
+- AI may explain decisions or draft proposed rules. Its output is untrusted and cannot authorize, capture, refund, or move money.
+- Never fabricate PayPal Identity / Log in with PayPal claims. A Gateway-local account is not PayPal-verified.
+- PayPal testing defaults to sandbox. PayPal credentials, access tokens, webhook credentials and signing secrets stay server-side.
+- Reject unsigned, malformed, stale, replayed, unknown, suspended, and revoked agents with HTTP 403.
+- Currency comparisons use decimal arithmetic, not JavaScript floating point.
+- Persist request verification, policy decisions, payment states and audit records.
+- Treat agent input, external API responses and LLM output as untrusted.
 
-## Architecture
+## Engineering approach
 - Next.js App Router, strict TypeScript, Prisma + SQLite for MVP.
-- Keep route handlers thin; place verification, policy, auth/session, and PayPal REST logic in lib/.
-- Use transactions for nonce consumption and state changes.
-- Keep AG Grid as the operational command center; grid values come from API/DB, not hard-coded dashboard fixtures.
+- Keep route handlers thin; business logic belongs in `lib/`.
+- Never present seeded demo traffic as real. Empty DB tables mean empty states.
+- Keep AG Grid connected to backend data.
+- Initial PayPal order intent is AUTHORIZE. Capture requires a separate explicit policy/consent check.
 
 ## Validation
-- Before completion run npm run lint, npm run typecheck, npm test, npx prisma migrate deploy (or npm run db:push for a fresh local DB), and npm run build.
-- Add regression tests for signature validation, replay prevention, and policy boundary cases.
-- Never commit .env* except .env.example, any SQLite DB, or generated secrets.
+Run `npm run lint`, `npm run typecheck`, `npm test`, `npx playwright test`, `npx prisma db push`, and `npm run build` before declaring readiness.
+Never commit `.env`, local database files, secrets, generated tokens, or private keys.
