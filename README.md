@@ -190,6 +190,8 @@ The AI risk assessment uses supplied transaction and stored gateway facts. It is
 
 ### AI configuration
 
+After pulling this change, apply the added PolicyDraft, SpendingPolicyVersion and Agent.expiresAt schema with `npm run db:push` (back up an existing database first).
+
 Set `OPENAI_API_KEY` in the deployment secret store. `OPENAI_MODEL` is optional and defaults to `gpt-6-luna`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
 
 API routes:
