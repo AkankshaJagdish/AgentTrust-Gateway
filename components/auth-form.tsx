@@ -1,0 +1,7 @@
+"use client";
+import { useState } from "react";
+export function AuthForm({mode}:{mode:"login"|"register"}) {
+ const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [name,setName]=useState("");const [error,setError]=useState("");const [busy,setBusy]=useState(false);
+ async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError("");try{const r=await fetch(`/api/auth/${mode}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,password,name})});const d=await r.json();if(!r.ok)throw new Error(d.error??"Unable to sign in.");window.location.href="/dashboard";}catch(e){setError(e instanceof Error?e.message:"Request failed.");}finally{setBusy(false);}}
+ return <form onSubmit={submit}><div className="field"><label>Email address</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@company.com"/></div>{mode==="register"&&<div className="field"><label>Your name</label><input value={name} onChange={e=>setName(e.target.value)} placeholder="Merchant administrator"/></div>}<div className="field"><label>Password</label><input required type="password" minLength={mode==="register"?10:1} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==="register"?"At least 10 characters":"Your password"}/></div>{error&&<div className="notice" style={{marginTop:14}}>{error}</div>}<button className="btn" disabled={busy}>{busy?"Working…":mode==="login"?"Sign in":"Create account"}</button></form>
+}
