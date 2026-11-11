@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import Decimal from "decimal.js";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { money, currency as normalizeCurrency } from "@/lib/money";
@@ -128,7 +129,7 @@ type PayPalOrderDetails = {
   purchase_units?: { reference_id?: string; custom_id?: string; payee?: { merchant_id?: string }; amount?: { currency_code: string; value: string }; payments?: { authorizations?: { id: string; status: string; amount: { currency_code: string; value: string } }[] } }[];
 };
 export async function getPayPalOrder(orderId: string) {
-  return paypal<PayPalOrderDetails>(`/v2/checkout/orders/${encodeURIComponent(orderId)}?{"x":"y"}`.replace("?%7B%22x%22:%22y%22%7D",""));
+  return paypal<PayPalOrderDetails>(`/v2/checkout/orders/${encodeURIComponent(orderId)}`);
 }
 
 export async function authorizePayPalOrder(orderId: string, merchantId: string) {
@@ -137,7 +138,9 @@ export async function authorizePayPalOrder(orderId: string, merchantId: string) 
   });
   if (!payment || payment.merchantId !== merchantId) throw new PayPalError("Order does not belong to this merchant.");
   if (payment.status === "AUTHORIZED" || payment.status === "CAPTURED") {
-    return prisma.paymentAuthorization.findFirst({ where: { paymentOrderId: payment.id }, orderBy: { createdAt: "desc" } });
+    const existing = await prisma.paymentAuthorization.findFirst({ where: { paymentOrderId: payment.id }, orderBy: { createdAt: "desc" } });
+    if (!existing) throw new PayPalError("Authorized payment is missing its stored authorization ID.");
+    return existing;
   }
   if (payment.status !== "APPROVED" && payment.status !== "CREATED") throw new PayPalError(`Cannot authorize a ${payment.status} order.`);
   const agent = await prisma.agent.findUnique({ where: { id: payment.agentId } });
@@ -198,6 +201,7 @@ export async function createCaptureApproval(input: {
   if (code !== order.currency || code !== authorization.currency) throw new PayPalError("Currency must match the original order and authorization.");
   if (!amount.eq(order.amount) || !amount.eq(authorization.amount) || amount.gt(consent.spendingCap) || amount.gt(policy.maxPerTx)) throw new PayPalError("Capture amount must exactly equal the authorized and consented amount and remain inside policy limits.");
   if (authorization.status === "CAPTURED" || authorization.status === "VOIDED") throw new PayPalError("Authorization is already terminal.");
+  if (!new Decimal(approval.approvedAmount.toString()).eq(authorization.amount)) throw new PayPalError("Capture approval does not exactly match stored authorization amount.");
   const approval = await prisma.captureApproval.create({ data: {
     paymentOrderId: order.id, authorizationId: authorization.id, userId: input.userId,
     approvedAmount: amount, currency: code, merchantId: input.merchantId,
