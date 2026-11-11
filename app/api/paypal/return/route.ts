@@ -7,7 +7,7 @@ export async function GET(request:Request) {
   const url=new URL(request.url);
   const orderId=url.searchParams.get("token");
   const returnToken=url.searchParams.get("return_token");
-  const redirect=(state:string)=>NextResponse.redirect(new URL(`/dashboard?payment=${state}`,url.origin));
+  const redirect=(state:string)=>NextResponse.redirect(new URL(state==="authorized"?`/dashboard?payment=${state}`:`/checkout/failed?payment=${state}`,url.origin));
   if(!orderId||!returnToken)return redirect("missing-return-token");
   try {
     const order=await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId}});
