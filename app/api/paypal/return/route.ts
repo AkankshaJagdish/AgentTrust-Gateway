@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
-import { authorizePayPalOrder } from "@/lib/paypal";
+import { authorizePayPalOrder, getPayPalOrder, markOrderStatus, PayPalError } from "@/lib/paypal";
+import { currentUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 export async function GET(request:Request){
-  const url=new URL(request.url),token=url.searchParams.get("token");
-  const redirect=(state:string)=>NextResponse.redirect(new URL(`/dashboard?payment=${state}`,url.origin));
-  if(!token)return redirect("missing-token");
-  try{
-    const order=await prisma.paymentOrder.findUnique({where:{paypalOrderId:token},include:{agent:{include:{consents:true}}}});
-    if(!order)return redirect("unknown-order");
-    const consent=await prisma.consent.findFirst({where:{agentId:order.agentId,userId:order.agent.userId??"",status:"ACTIVE",expiresAt:{gt:new Date()},currency:order.currency}});
-    if(!consent || order.amount.gt(consent.spendingCap))return redirect("consent-revoked");
-    const decision=await prisma.agentRequest.findUnique({where:{requestId:order.agentRequestId}});
-    if(!decision||decision.decision!=="ALLOW")return redirect("policy-blocked");
-    await authorizePayPalOrder(token);
-    await audit({actorType:"PAYPAL",action:"ORDER_AUTHORIZED",entityType:"PaymentOrder",entityId:order.id,outcome:"AUTHORIZED"});
-    return redirect("authorized");
-  }catch{return redirect("error");}
+ const url=new URL(request.url),orderId=url.searchParams.get("token");
+ const user=await currentUser();
+ const redirect=(state:string)=>NextResponse.redirect(new URL(`/dashboard?payment=${state}`,url.origin));
+ if(!orderId)return redirect("missing-token");
+ if(!user)return NextResponse.redirect(new URL(`/login?returnTo=${encodeURIComponent(url.pathname+url.search)}`,url.origin));
+ try{
+  const payment=await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId},include:{agent:true,agentRequest:true}});
+  if(!payment||payment.merchantId!==user.id||payment.agent.userId!==user.id)return redirect("unknown-order");
+  if(!payment.agentRequest.signatureValid||payment.agentRequest.decision!=="ALLOW")return redirect("policy-blocked");
+  const state=await getPayPalOrder(orderId);
+  if(state.status!=="APPROVED")return redirect("not-approved");
+  const auth=await authorizePayPalOrder(orderId,user.id);
+  await audit({userId:user.id,actorType:"PAYPAL",action:"BUYER_APPROVED_ORDER_AUTHORIZED",entityType:"PaymentOrder",entityId:payment.id,outcome:"AUTHORIZED",metadata:{authorizationId:auth?.paypalAuthorizationId??auth?.id}});
+  return redirect("authorized");
+ }catch(error){
+  const payment=await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId}});
+  if(payment)await markOrderStatus(orderId,"FAILED","PAYPAL_RETURN",undefined,error instanceof Error?error.message:"Authorization failed").catch(()=>undefined);
+  await audit({userId:user.id,actorType:"PAYPAL",action:"ORDER_AUTHORIZATION_FAILED",entityType:"PaymentOrder",entityId:payment?.id,outcome:"FAILED",reason:error instanceof Error?error.message:"Authorization failed"}).catch(()=>undefined);
+  return redirect(error instanceof PayPalError?"authorization-failed":"error");
+ }
 }
