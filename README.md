@@ -171,3 +171,45 @@ npm run build
 Added Vitest coverage includes Orders v2 AUTHORIZE payload, inactive agent / non-ALLOW denial, raw-body webhook verification postback, duplicate event ID handling, invalid signature and stale transmission, plus exact decimal/currency/consent policy boundaries. Playwright smoke tests remain available for local application testing.
 
 Sandbox end-to-end results must be recorded only after a sandbox REST app and webhook ID are configured and the actual buyer approval/merchant capture path has been executed. No sandbox credentials are committed.
+
+
+## AI policy assistant
+
+Merchants can describe agent security and spending rules in natural language in the dashboard. The OpenAI Responses API uses Structured Outputs generated from a Zod schema; AgentTrust validates the result with decimal arithmetic and the selected active human-consent cap.
+
+The workflow is deliberately proposal-first:
+1. Choose an active, unexpired consent and describe the rules.
+2. Generate a structured JSON preview with any clarification requests.
+3. Inspect the proposed limits and hard security invariants.
+4. Explicitly confirm activation. The server atomically consumes the 30-minute draft, rechecks consent/currency/caps, creates the enabled policy and stores immutable version 1.
+5. Edit an active policy from the dashboard. Every edit or enable/disable action creates a new immutable version; the history view shows prior snapshots.
+
+Verified-agent requirements and expired-agent blocking are mandatory. They cannot be disabled by an AI-generated policy. The deterministic policy engine remains the only authority for ALLOW / BLOCK / REQUIRE_APPROVAL. “Above $30” means strictly greater than $30: $30.00 does not trigger the threshold; $30.01 does.
+
+The AI risk assessment uses supplied transaction and stored gateway facts. It is advisory and displayed alongside the deterministic policy result. It cannot authorize or move money. The OpenAI client is never given PayPal tools.
+
+### AI configuration
+
+Set `OPENAI_API_KEY` in the deployment secret store. `OPENAI_MODEL` is optional and defaults to `gpt-5.6-mini`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
+
+API routes:
+- `POST /api/ai/policy/preview`
+- `POST /api/ai/policy/activate` (merchant confirmation required)
+- `POST /api/ai/risk/assess` (advisory only)
+- `GET /api/policies/{id}` (including version history)
+- `PATCH /api/policies/{id}` (merchant edit; creates a new version)
+
+See [AI Policy Assistant documentation](docs/AI-POLICY-ASSISTANT.md) for examples and setup.
+
+### Optional Codex development MCP
+
+The project-scoped `.codex/config.toml` configures the PayPal sandbox Streamable HTTP MCP at `https://mcp.sandbox.paypal.com/http` and OpenAI Docs MCP at `https://developers.openai.com/mcp`. The PayPal MCP tool allow-list starts empty until its live tool names are inspected; enable only read-only lookup tools. Authenticate interactively with `codex mcp login paypal` and verify using `codex mcp list`. Cloud Codex does not inherit workstation credentials automatically.
+
+In a supported Codex environment, APIMatic PayPal context plugin installation is:
+
+```bash
+npx context-plugins install paypal
+```
+
+MCP and APIMatic are optional development aids, not application runtime dependencies. A cloud Codex session must verify its own remote connections; this GitHub-only session cannot claim those connections were authenticated or that the APIMatic plugin was installed.
+
