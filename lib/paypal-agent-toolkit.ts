@@ -21,3 +21,11 @@ export function createPayPalAgentToolkit() {
     },
   });
 }
+
+/**
+ * Returns the toolkit's documented AI SDK tool definitions under the orders.get-only allow-list.
+ * This helper is intentionally not imported by the policy assistant or payment routes.
+ */
+export function createReadOnlyPayPalTools() {
+  return createPayPalAgentToolkit().getTools();
+}
