@@ -58,9 +58,9 @@ const signature = createHmac("sha256",key).update(canonical).digest("hex");
 A request is accepted only inside a five-minute timestamp window; each nonce can be used once per agent.
 
 ## Policy and PayPal
-The policy engine checks active agent, unexpired matching human consent, currency and consent cap, active policy, per-transaction cap, UTC-day total and approval threshold. A policy ALLOW creates a PayPal Orders v2 order with `intent: AUTHORIZE`. The PayPal return path authorizes; no automatic capture is performed. A future capture operation must rerun policy and consent checks and require explicit approval.
+The policy engine checks active agent, unexpired matching human consent, currency and consent cap, active policy, per-transaction cap, UTC-day total and approval threshold. A policy ALLOW creates a PayPal Orders v2 order with `intent: AUTHORIZE`. After buyer approval is confirmed against the live PayPal order, the gateway authorizes it and persists the authorization ID. A separate merchant capture approval rechecks agent, consent, policy, amount, currency, merchant and order associations before capture.
 
-PayPal REST OAuth client ID/secret are server-side; mode defaults to SANDBOX. PayPal Identity/Log in with PayPal is not represented as verified: local Gateway accounts are not PayPal identity claims. A real OIDC flow requires merchant app configuration, scopes, redirect URI and verified tokens. Webhook signature verification, reconciliation and capture remain integrations requiring PayPal sandbox credentials and callback URL.
+PayPal REST OAuth client ID/secret are server-side; mode defaults to SANDBOX. PayPal Identity/Log in with PayPal is not represented as verified: local Gateway accounts are not PayPal identity claims. A real OIDC flow requires merchant app configuration, scopes, redirect URI and verified tokens. Webhook verification and reconciliation plus explicit capture and void APIs are implemented; they require PayPal sandbox credentials and a registered webhook ID.
 
 ## PayPal tools and APIMatic
 Official PayPal AI Toolkit supports Codex marketplace installation:
