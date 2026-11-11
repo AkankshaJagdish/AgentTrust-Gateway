@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { money, currency as normalizeCurrency } from "@/lib/money";
 import type { PaymentStatus } from "@prisma/client";
+import { isAgentExpired } from "@/lib/agent-expiry";
 
 const apiBase = () => process.env.PAYPAL_ENVIRONMENT === "LIVE"
   ? "https://api-m.paypal.com"
@@ -145,7 +146,7 @@ export async function authorizePayPalOrderFromBuyerReturn(orderId:string,returnT
   if(!order||order.returnTokenHash!==tokenHash||!order.returnTokenExpiresAt||order.returnTokenExpiresAt<=new Date()||order.returnTokenConsumedAt) {
     throw new PayPalError("Buyer return token is invalid, expired, or already consumed.",401);
   }
-  if(order.agent.userId!==order.merchantId||order.agent.status!=="ACTIVE"||(order.agent.expiresAt&&order.agent.expiresAt<=new Date())||!order.agentRequest.signatureValid||order.agentRequest.decision!=="ALLOW") {
+  if(order.agent.userId!==order.merchantId||order.agent.status!=="ACTIVE"||isAgentExpired(order.agent.expiresAt)||!order.agentRequest.signatureValid||order.agentRequest.decision!=="ALLOW") {
     throw new PayPalError("Agent or original request is no longer authorized.",403);
   }
   const consent=await prisma.consent.findFirst({where:{id:order.agentRequest.consentId??undefined,userId:order.merchantId,agentId:order.agentId,status:"ACTIVE",expiresAt:{gt:new Date()},currency:order.currency}});
@@ -170,7 +171,7 @@ export async function authorizePayPalOrder(orderId: string, merchantId: string) 
   }
   if (payment.status !== "APPROVED") throw new PayPalError("Buyer approval must be recorded before authorization.");
   const agent = await prisma.agent.findUnique({ where: { id: payment.agentId } });
-  if (!agent || agent.status !== "ACTIVE" || (agent.expiresAt && agent.expiresAt <= new Date()) || agent.userId !== merchantId) throw new PayPalError("Agent identity is expired, inactive, or not merchant-linked.");
+  if (!agent || agent.status !== "ACTIVE" || isAgentExpired(agent.expiresAt) || agent.userId !== merchantId) throw new PayPalError("Agent identity is expired, inactive, or not merchant-linked.");
   const consent = await prisma.consent.findFirst({ where: {
     id: payment.agentRequest.consentId ?? undefined, agentId: agent.id, userId: merchantId,
     status: "ACTIVE", expiresAt: { gt: new Date() }, currency: payment.currency,
