@@ -33,9 +33,11 @@ describe("AI policy structured output examples",()=>{
   const parsed=PolicySpecSchema.parse({...base,requireApprovalAbove:"55.00"});
   expect(()=>validatePolicySpec(parsed,consent)).toThrow(/no greater than the per-transaction limit/);
  });
- it("requires verification and expired-agent blocking in every generated policy",()=>{
-  expect(()=>PolicySpecSchema.parse({...base,blockExpiredAgents:false})).toThrow();
-  expect(()=>PolicySpecSchema.parse({...base,requireVerifiedAgents:false})).toThrow();
+ it("requires verification and expired-agent blocking in every activatable policy",()=>{
+  const blockDisabled=PolicySpecSchema.parse({...base,blockExpiredAgents:false});
+  const verificationDisabled=PolicySpecSchema.parse({...base,requireVerifiedAgents:false});
+  expect(()=>validatePolicySpec(blockDisabled,consent)).toThrow(/mandatory/);
+  expect(()=>validatePolicySpec(verificationDisabled,consent)).toThrow(/mandatory/);
  });
  it("treats 'above $30' as strictly greater than $30",()=>{
   expect(isAboveApprovalThreshold("30.00","30.00")).toBe(false);
