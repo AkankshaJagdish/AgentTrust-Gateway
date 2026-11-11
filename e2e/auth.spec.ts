@@ -1,0 +1,2 @@
+import {test,expect} from "@playwright/test";
+test("merchant can register and reach dashboard",async({page})=>{await page.goto("/register");const email=`merchant-${Date.now()}@example.test`;await page.getByLabel("Email address").fill(email);await page.getByLabel("Your name").fill("Demo Merchant");await page.getByLabel("Password").fill("SecurePassword123!");await page.getByRole("button",{name:"Create account"}).click();await expect(page.getByRole("heading",{name:"Merchant overview"})).toBeVisible();await expect(page.getByText("SANDBOX MODE")).toBeVisible();});
