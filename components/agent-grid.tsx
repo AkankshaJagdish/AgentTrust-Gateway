@@ -2,7 +2,8 @@
 import { useMemo, useState } from "react";
 import { AgGridReact } from "@ag-grid-community/react";
 import type { ColDef, ICellRendererParams } from "@ag-grid-community/core";
-import { ClientSideRowModelModule, ModuleRegistry } from "@ag-grid-community/core";
+import { ModuleRegistry } from "@ag-grid-community/core";
+import { ClientSideRowModelModule } from "@ag-grid-community/client-side-row-model";
 ModuleRegistry.registerModules([ClientSideRowModelModule]);
 type Row=Record<string,any>;
 function Status({value}:ICellRendererParams){const color=["ACTIVE","ALLOW","VERIFIED","CAPTURED","AUTHORIZED","SUCCESS"].includes(value)?"green":["BLOCK","REJECTED","REVOKED","FAILED","SUSPENDED"].includes(value)?"red":["REQUIRE_APPROVAL","PENDING","CREATED"].includes(value)?"amber":"gray";return <span className={`pill ${color}`}>{String(value??"—").replaceAll("_"," ")}</span>}
