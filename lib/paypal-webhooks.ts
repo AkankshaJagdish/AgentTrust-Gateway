@@ -121,72 +121,22 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
   if(!event.id||!event.event_type)throw new PayPalError("PayPal webhook payload is missing its event ID or event type.",400);
   const existing=await prisma.paymentEvent.findUnique({where:{paypalEventId:event.id}});
   if(existing?.processedAt)return {duplicate:true,eventId:event.id};
-  if(existing && !existing.processedAt) {
-    // Re-delivery of a previously verified but failed event retries reconciliation against its stored raw body.
-    return await processVerifiedEvent(existing.id, JSON.parse(existing.rawBody) as PayPalWebhook, existing.paymentOrderId);
+  if(existing) {
+    // The event was cryptographically verified on first receipt. Retry reconciliation from the stored event body.
+    return processVerifiedEvent(existing.id,JSON.parse(existing.rawBody) as PayPalWebhook,existing.paymentOrderId);
   }
   const orderId=relatedOrderId(event);
   const order=orderId?await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId}}):null;
-  const eventRecord=await prisma.paymentEvent.create({data:{
+  const record=await prisma.paymentEvent.create({data:{
     paypalEventId:event.id,eventType:event.event_type,resourceId:event.resource?.id,
     resourceType:event.event_type.split(".")[0],summary:event.summary,rawBody,
     verifiedAt:new Date(),paymentOrderId:order?.id,
   }}).catch(async error=>{
-    const duplicate=await prisma.paymentEvent.findUnique({where:{paypalEventId:event.id}});
-    if(duplicate)return null;
+    const raced=await prisma.paymentEvent.findUnique({where:{paypalEventId:event.id}});
+    if(raced?.processedAt)return null;
+    if(raced)return processVerifiedEvent(raced.id,JSON.parse(raced.rawBody) as PayPalWebhook,raced.paymentOrderId);
     throw error;
   });
-  if(!eventRecord)return {duplicate:true,eventId:event.id};
-  try{
-    if(orderId&&order){
-      const type=event.event_type;
-      if(type==="CHECKOUT.ORDER.APPROVED"&&order.status==="CREATED"){
-        // Event receipt is only a signal. Confirm live PayPal state before marking buyer approval.
-        const liveOrder=await getPayPalOrder(orderId);
-        if(liveOrder.status==="APPROVED")await markOrderStatus(orderId,"APPROVED","PAYPAL_WEBHOOK_RECONCILED",event.id);
-      }else if(type==="CHECKOUT.PAYMENT-APPROVAL.REVERSED"){
-        await markOrderStatus(orderId,"FAILED","PAYPAL_WEBHOOK",event.id,"Buyer/payment approval was reversed.");
-      }else if(type==="PAYMENT.AUTHORIZATION.CREATED"&&event.resource?.id){
-        // Keep the event for reconciliation; never use webhook receipt as buyer consent or capture consent.
-        await audit({actorType:"PAYPAL_WEBHOOK",action:"AUTHORIZATION_EVENT_RECEIVED",entityType:"PaymentOrder",entityId:order.id,outcome:"RECEIVED",metadata:{eventId:event.id,authorizationId:event.resource.id}});
-      }else if(type==="PAYMENT.AUTHORIZATION.VOIDED"){
-        const authorization=event.resource?.id?await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:event.resource.id}}):null;
-        if(authorization&&authorization.paymentOrderId===order.id&&order.status==="AUTHORIZED"){
-          await prisma.paymentAuthorization.update({where:{id:authorization.id},data:{status:"VOIDED"}});
-          await markOrderStatus(orderId,"VOIDED","PAYPAL_WEBHOOK",event.id);
-        }
-      }else if(type==="PAYMENT.CAPTURE.COMPLETED"){
-        const capture=event.resource;
-        if(capture?.id&&capture.amount?.value&&capture.amount.currency_code){
-          const authorizationId=typeof (capture as any).processor_response?.authorization_id==="string"?(capture as any).processor_response.authorization_id:undefined;
-          const authorization=authorizationId
-            ? await prisma.paymentAuthorization.findUnique({where:{paypalAuthorizationId:authorizationId}})
-            : await prisma.paymentAuthorization.findFirst({where:{paymentOrderId:order.id},orderBy:{createdAt:"desc"}});
-          await prisma.paymentCapture.upsert({
-            where:{paypalCaptureId:capture.id},
-            create:{paymentOrderId:order.id,authorizationId:authorization?.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
-            update:{status:"COMPLETED",authorizationId:authorization?.id},
-          });
-        }
-        if(order.status==="AUTHORIZED"||order.status==="PENDING")await markOrderStatus(orderId,"CAPTURED","PAYPAL_WEBHOOK",event.id);
-        if(order.status==="AUTHORIZED"||order.status==="PENDING"){
-          const auth=await prisma.paymentAuthorization.findFirst({where:{paymentOrderId:order.id},orderBy:{createdAt:"desc"}});
-          if(auth&&auth.status!=="CAPTURED")await prisma.paymentAuthorization.update({where:{id:auth.id},data:{status:"CAPTURED"}});
-        }
-      }else if(type==="PAYMENT.CAPTURE.PENDING"){
-        if(order.status==="AUTHORIZED")await markOrderStatus(orderId,"PENDING","PAYPAL_WEBHOOK",event.id);
-      }else if(type==="PAYMENT.CAPTURE.DENIED"){
-        if(order.status==="AUTHORIZED"||order.status==="PENDING")await markOrderStatus(orderId,"FAILED","PAYPAL_WEBHOOK",event.id,"PayPal reports that the capture was denied.");
-      }else if(type==="PAYMENT.CAPTURE.REFUNDED"){
-        await audit({actorType:"PAYPAL_WEBHOOK",action:"CAPTURE_REFUNDED_EVENT",entityType:"PaymentOrder",entityId:order.id,outcome:"REFUNDED",metadata:{eventId:event.id}});
-      }
-    }
-    await prisma.paymentEvent.update({where:{id:eventRecord.id},data:{processedAt:new Date()}});
-    await audit({actorType:"PAYPAL_WEBHOOK",action:"PAYPAL_WEBHOOK_PROCESSED",entityType:"PaymentEvent",entityId:eventRecord.id,outcome:"VERIFIED",metadata:{eventId:event.id,eventType:event.event_type,paymentOrderId:order?.id}});
-    return {duplicate:false,eventId:event.id,processed:true};
-  }catch(error){
-    await prisma.paymentEvent.update({where:{id:eventRecord.id},data:{processingError:error instanceof Error?error.message:"Webhook processing failed."}});
-    await audit({actorType:"PAYPAL_WEBHOOK",action:"PAYPAL_WEBHOOK_PROCESSING_FAILED",entityType:"PaymentEvent",entityId:eventRecord.id,outcome:"FAILED",reason:error instanceof Error?error.message:"Webhook processing failed."});
-    throw error;
-  }
+  if(!record)return {duplicate:true,eventId:event.id};
+  return processVerifiedEvent(record.id,event,order?.id??null);
 }
