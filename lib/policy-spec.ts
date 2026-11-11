@@ -23,7 +23,7 @@ export function validatePolicySpec(spec:PolicySpec,consent:{currency:string;spen
  if(!maxPerTx.gt(0)||!dailyCap.gt(0))throw new Error("Transaction and daily limits must be greater than zero.");
  if(maxPerTx.gt(cap)||dailyCap.gt(cap))throw new Error("Policy limits cannot exceed the human consent spending cap.");
  let threshold:Decimal|null=null;
- if(spec.requireApprovalAbove!==null){threshold=money(spec.requireApprovalAbove);if(!threshold.gt(0)||threshold.gt(maxPerTx))throw new Error("The human approval threshold must be positive and no greater than the per-transaction limit.");}
+ if(spec.requireApprovalAbove!==null){threshold=money(spec.requireApprovalAbove);if(!threshold.gt(0)||threshold.gte(maxPerTx))throw new Error("The human approval threshold must be positive and strictly below the per-transaction limit.");}
  return {currency:code,maxPerTx,dailyCap,requireApprovalAbove:threshold};
 }
 
