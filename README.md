@@ -190,7 +190,7 @@ The AI risk assessment uses supplied transaction and stored gateway facts. It is
 
 ### AI configuration
 
-Set `OPENAI_API_KEY` in the deployment secret store. `OPENAI_MODEL` is optional and defaults to `gpt-5.6-mini`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
+Set `OPENAI_API_KEY` in the deployment secret store. `OPENAI_MODEL` is optional and defaults to `gpt-6-luna`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
 
 API routes:
 - `POST /api/ai/policy/preview`
