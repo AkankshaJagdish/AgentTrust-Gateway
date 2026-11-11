@@ -115,6 +115,9 @@ model PaymentOrder {
   paypalOrderId String? @unique
   merchantId String
   paypalPayeeId String?
+  returnTokenHash String? @unique
+  returnTokenExpiresAt DateTime?
+  returnTokenConsumedAt DateTime?
   status PaymentStatus @default(CREATED)
   amount Decimal @db.Decimal(18,2)
   currency String
