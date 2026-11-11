@@ -8,6 +8,7 @@ url = "https://mcp.sandbox.paypal.com/http"
 enabled = true
 # Fail closed until the remote tool catalogue is inspected and exact read-only names are allow-listed.
 enabled_tools = []
+default_tools_approval_mode = "prompt"
 
 [mcp_servers.openaiDeveloperDocs]
 url = "https://developers.openai.com/mcp"
