@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { currency,money } from "@/lib/money";
 
 export const PolicySpecSchema=z.object({
- name:z.string(),summary:z.string(),currency:z.string(),
+ name:z.string().min(2).max(80),summary:z.string().min(1),currency:z.string().length(3),
  maxPerTx:z.string().nullable(),dailyCap:z.string().nullable(),requireApprovalAbove:z.string().nullable(),
  requireVerifiedAgents:z.literal(true),blockExpiredAgents:z.literal(true),clarifications:z.array(z.string())
 });
