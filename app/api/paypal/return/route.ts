@@ -13,6 +13,9 @@ export async function GET(request:Request){
   const payment=await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId},include:{agent:true,agentRequest:true}});
   if(!payment||payment.merchantId!==user.id||payment.agent.userId!==user.id)return redirect("unknown-order");
   if(!payment.agentRequest.signatureValid||payment.agentRequest.decision!=="ALLOW")return redirect("policy-blocked");
+  const consent=await prisma.consent.findFirst({where:{id:payment.agentRequest.consentId??undefined,userId:user.id,agentId:payment.agentId,status:"ACTIVE",expiresAt:{gt:new Date()},currency:payment.currency}});
+  const policy=await prisma.spendingPolicy.findFirst({where:{id:payment.agentRequest.policyId??undefined,userId:user.id,enabled:true,currency:payment.currency,OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}]}});
+  if(!consent||!policy||payment.amount.gt(consent.spendingCap)||payment.amount.gt(policy.maxPerTx))return redirect("consent-or-policy-invalid");
   const state=await getPayPalOrder(orderId);
   if(state.status!=="APPROVED")return redirect("not-approved");
   const auth=await authorizePayPalOrder(orderId,user.id);
