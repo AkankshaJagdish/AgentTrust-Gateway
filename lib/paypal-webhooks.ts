@@ -66,7 +66,11 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
   const event=JSON.parse(rawBody) as PayPalWebhook;
   if(!event.id||!event.event_type)throw new PayPalError("PayPal webhook payload is missing its event ID or event type.",400);
   const existing=await prisma.paymentEvent.findUnique({where:{paypalEventId:event.id}});
-  if(existing)return {duplicate:true,eventId:event.id};
+  if(existing?.processedAt)return {duplicate:true,eventId:event.id};
+  if(existing && !existing.processedAt) {
+    // Re-delivery of a previously verified but failed event retries reconciliation, not verification/audit creation.
+    return {duplicate:true,eventId:event.id,processingPending:true};
+  }
   const orderId=relatedOrderId(event);
   const order=orderId?await prisma.paymentOrder.findUnique({where:{paypalOrderId:orderId}}):null;
   const eventRecord=await prisma.paymentEvent.create({data:{
