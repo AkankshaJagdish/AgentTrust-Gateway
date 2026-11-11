@@ -13,6 +13,7 @@ export async function evaluatePolicy(input: PolicyInput): Promise<PolicyResult> 
   catch (error) { return { decision: "BLOCK", reason: error instanceof Error ? error.message : "Invalid amount or currency." }; }
   const agent = await prisma.agent.findUnique({ where: { id: input.agentId } });
   if (!agent || agent.status !== "ACTIVE") return { decision: "BLOCK", reason: "The agent is not active." };
+  if (agent.expiresAt && agent.expiresAt <= new Date()) return { decision: "BLOCK", reason: "The agent identity has expired." };
   const now = new Date();
   const consent = await prisma.consent.findFirst({
     where: { agentId: agent.id, status: "ACTIVE", expiresAt: { gt: now }, currency: code },
