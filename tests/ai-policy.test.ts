@@ -1,5 +1,5 @@
 import {describe,expect,it} from "vitest";
-import {PolicySpecSchema,validatePolicySpec} from "@/lib/policy-spec";
+import {PolicySpecSchema,validatePolicySpec,isAboveApprovalThreshold} from "@/lib/policy-spec";
 
 const consent={currency:"USD",spendingCap:"200.00"};
 const base={name:"Verified procurement",summary:"Bound agent purchases and require human review above threshold.",currency:"USD",maxPerTx:"50.00",dailyCap:"150.00",requireApprovalAbove:"30.00",requireVerifiedAgents:true as const,blockExpiredAgents:true as const,clarifications:[] as string[]};
@@ -38,7 +38,7 @@ describe("AI policy structured output examples",()=>{
   expect(()=>PolicySpecSchema.parse({...base,requireVerifiedAgents:false})).toThrow();
  });
  it("treats 'above $30' as strictly greater than $30",()=>{
-  expect(Number("30.00")>Number("30.00")).toBe(false);
-  expect(Number("30.01")>Number("30.00")).toBe(true);
+  expect(isAboveApprovalThreshold("30.00","30.00")).toBe(false);
+  expect(isAboveApprovalThreshold("30.01","30.00")).toBe(true);
  });
 });
