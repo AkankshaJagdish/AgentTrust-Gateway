@@ -7,7 +7,7 @@ const db={
 };
 vi.mock("@/lib/prisma",()=>({prisma:db}));
 vi.mock("@/lib/audit",()=>({audit:vi.fn().mockResolvedValue({})}));
-vi.mock("@/lib/paypal",()=>({getPayPalAccessToken:vi.fn().mockResolvedValue("sandbox-token"),markOrderStatus:vi.fn().mockResolvedValue({})}));
+vi.mock("@/lib/paypal",()=>({getPayPalAccessToken:vi.fn().mockResolvedValue("sandbox-token"),markOrderStatus:vi.fn().mockResolvedValue({}),getPayPalOrder:vi.fn().mockResolvedValue({status:"APPROVED"})}));
 import {receivePayPalWebhook} from "@/lib/paypal-webhooks";
 describe("PayPal webhook handling",()=>{
  beforeEach(()=>{vi.clearAllMocks();process.env.PAYPAL_WEBHOOK_ID="sandbox-webhook-id";db.paymentEvent.findUnique.mockResolvedValue(null);db.paymentEvent.create.mockResolvedValue({id:"event-row-1"});db.paymentOrder.findUnique.mockResolvedValue(null);db.paymentEvent.update.mockResolvedValue({});global.fetch=vi.fn().mockResolvedValue({ok:true,json:async()=>({verification_status:"SUCCESS"})}) as any;});
