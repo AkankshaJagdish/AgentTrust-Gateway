@@ -1,5 +1,5 @@
 import "server-only";
-import { getPayPalAccessToken, markOrderStatus, PayPalError } from "@/lib/paypal";
+import { getPayPalAccessToken, markOrderStatus, PayPalError, getPayPalOrder } from "@/lib/paypal";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 
@@ -104,16 +104,26 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
     if(orderId&&order){
       const type=event.event_type;
       if(type==="CHECKOUT.ORDER.APPROVED"&&order.status==="CREATED"){
-        await markOrderStatus(orderId,"APPROVED","PAYPAL_WEBHOOK",event.id);
+        // Event receipt is only a signal. Confirm live PayPal state before marking buyer approval.
+        const liveOrder=await getPayPalOrder(orderId);
+        if(liveOrder.status==="APPROVED")await markOrderStatus(orderId,"APPROVED","PAYPAL_WEBHOOK_RECONCILED",event.id);
       }else if(type==="CHECKOUT.PAYMENT-APPROVAL.REVERSED"){
         await markOrderStatus(orderId,"FAILED","PAYPAL_WEBHOOK",event.id,"Buyer/payment approval was reversed.");
       }else if(type==="PAYMENT.AUTHORIZATION.CREATED"&&event.resource?.id){
-        // Do not trust the webhook alone for authorization amounts. Reconciliation uses stored resource IDs and fresh PayPal resource lookup on the return path.
+        // Keep the event for reconciliation; never use webhook receipt as buyer consent or capture consent.
         await audit({actorType:"PAYPAL_WEBHOOK",action:"AUTHORIZATION_EVENT_RECEIVED",entityType:"PaymentOrder",entityId:order.id,outcome:"RECEIVED",metadata:{eventId:event.id,authorizationId:event.resource.id}});
       }else if(type==="PAYMENT.AUTHORIZATION.VOIDED"){
         await markOrderStatus(orderId,"VOIDED","PAYPAL_WEBHOOK",event.id);
       }else if(type==="PAYMENT.CAPTURE.COMPLETED"){
         await markOrderStatus(orderId,"CAPTURED","PAYPAL_WEBHOOK",event.id);
+        const capture=event.resource;
+        if(capture?.id&&capture.amount?.value&&capture.amount.currency_code){
+          await prisma.paymentCapture.upsert({
+            where:{paypalCaptureId:capture.id},
+            create:{paymentOrderId:order.id,paypalCaptureId:capture.id,status:"COMPLETED",amount:capture.amount.value,currency:capture.amount.currency_code},
+            update:{status:"COMPLETED"},
+          });
+        }
       }else if(type==="PAYMENT.CAPTURE.PENDING"){
         await markOrderStatus(orderId,"PENDING","PAYPAL_WEBHOOK",event.id);
       }else if(type==="PAYMENT.CAPTURE.DENIED"){
