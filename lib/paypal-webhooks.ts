@@ -16,31 +16,10 @@ type PayPalWebhook = {
   summary?: string;
   resource?: { id?: string; status?: string; amount?: { value?: string; currency_code?: string }; supplementary_data?: { related_ids?: { order_id?: string } }; [key:string]: unknown };
 };
-const trustedCertHosts = new Set(["api.paypal.com","api.sandbox.paypal.com","api-m.paypal.com","api-m.sandbox.paypal.com"]);
-const recentCertificates = new Map<string,{pem:string;expiresAt:number}>();
-
 function webhookId() {
-  const id=process.env.PAYPAL_WEBHOOK_ID;
-  if(!id)throw new PayPalError("PAYPAL_WEBHOOK_ID is required to verify PayPal notifications.");
+  const id = process.env.PAYPAL_WEBHOOK_ID;
+  if (!id) throw new PayPalError("PAYPAL_WEBHOOK_ID is required to verify PayPal notifications.");
   return id;
-}
-function validateCertUrl(value:string) {
-  const url=new URL(value);
-  if(url.protocol!=="https:"||!trustedCertHosts.has(url.hostname)||!url.pathname.startsWith("/v1/notifications/certs/")) {
-    throw new PayPalError("PayPal certificate URL is not a trusted PayPal certificate endpoint.");
-  }
-  return url;
-}
-async function certificate(urlValue:string) {
-  const url=validateCertUrl(urlValue);
-  const cached=recentCertificates.get(url.href);
-  if(cached&&cached.expiresAt>Date.now())return cached.pem;
-  const response=await fetch(url,{headers:{Accept:"application/x-pem-file, application/octet-stream"},cache:"no-store"});
-  if(!response.ok)throw new PayPalError("Unable to retrieve PayPal webhook certificate.",response.status);
-  const pem=await response.text();
-  if(!pem.includes("-----BEGIN CERTIFICATE-----")||!pem.includes("-----END CERTIFICATE-----"))throw new PayPalError("PayPal certificate response was not a PEM certificate.");
-  recentCertificates.set(url.href,{pem,expiresAt:Date.now()+6*60*60*1000});
-  return pem;
 }
 
 export async function verifyPayPalWebhook(headers:WebhookHeaders,rawBody:string):Promise<boolean> {
