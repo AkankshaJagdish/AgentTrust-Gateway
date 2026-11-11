@@ -199,6 +199,13 @@ export async function createCaptureApproval(input: {
   if (!consent) throw new PayPalError("Active human consent is required for capture.");
   const policy = await prisma.spendingPolicy.findFirst({ where: { id: request.policyId ?? undefined, userId: input.userId, enabled: true, currency: code, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
   if (!policy) throw new PayPalError("The original spending policy is expired or inactive.");
+  const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+  const daily = await prisma.agentRequest.aggregate({
+    where: { agentId: agent.id, decision: "ALLOW", currency: code, createdAt: { gte: dayStart } },
+    _sum: { amount: true },
+  });
+  const totalAuthorizedRequests = new Decimal(daily._sum.amount?.toString() ?? "0");
+  if (totalAuthorizedRequests.gt(policy.dailyCap)) throw new PayPalError("The current UTC-day authorized request total exceeds the active daily policy cap.");
   if (code !== order.currency || code !== authorization.currency) throw new PayPalError("Currency must match the original order and authorization.");
   if (!amount.eq(order.amount) || !amount.eq(authorization.amount) || amount.gt(consent.spendingCap) || amount.gt(policy.maxPerTx)) throw new PayPalError("Capture amount must exactly equal the authorized and consented amount and remain inside policy limits.");
   if (authorization.status === "CAPTURED" || authorization.status === "VOIDED") throw new PayPalError("Authorization is already terminal.");
