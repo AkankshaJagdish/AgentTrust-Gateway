@@ -1,7 +1,8 @@
 import "server-only";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { PolicySpecSchema,PolicySpec,RiskAssessmentSchema,RiskAssessment } from "@/lib/policy-spec";
+import { PolicySpecSchema,RiskAssessmentSchema } from "@/lib/policy-spec";
+import type { PolicySpec,RiskAssessment } from "@/lib/policy-spec";
 export { PolicySpecSchema,RiskAssessmentSchema,validatePolicySpec } from "@/lib/policy-spec";
 export type { PolicySpec,RiskAssessment } from "@/lib/policy-spec";
 
@@ -62,18 +63,3 @@ export async function assessTransactionRisk(input: {
   return RiskAssessmentSchema.parse(response.output_parsed);
 }
 
-export function validatePolicySpec(spec:PolicySpec,consent:{currency:string;spendingCap:string}) {
-  const code=currency(spec.currency);
-  if(code!==consent.currency)throw new Error("Policy currency must match the selected human consent.");
-  if(!spec.requireVerifiedAgents||!spec.blockExpiredAgents)throw new Error("Verified-agent checks and expired-agent blocking are mandatory.");
-  if(!spec.maxPerTx||!spec.dailyCap)throw new Error("A maximum transaction amount and daily budget are required before activation.");
-  const maxPerTx=money(spec.maxPerTx),dailyCap=money(spec.dailyCap),cap=money(consent.spendingCap);
-  if(!maxPerTx.gt(0)||!dailyCap.gt(0))throw new Error("Transaction and daily limits must be greater than zero.");
-  if(maxPerTx.gt(cap)||dailyCap.gt(cap))throw new Error("Policy limits cannot exceed the human consent spending cap.");
-  let threshold:Decimal|null=null;
-  if(spec.requireApprovalAbove!==null){
-    threshold=money(spec.requireApprovalAbove);
-    if(!threshold.gt(0)||threshold.gt(maxPerTx))throw new Error("The human approval threshold must be positive and no greater than the per-transaction limit.");
-  }
-  return {currency:code,maxPerTx,dailyCap,requireApprovalAbove:threshold};
-}
