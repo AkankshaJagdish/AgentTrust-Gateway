@@ -104,3 +104,70 @@ Vitest covers decimal, signature and policy boundary behavior. Playwright includ
 
 ## License
 MIT. See [LICENSE](LICENSE).
+
+
+## PayPal sandbox payment operations (expanded implementation)
+
+The payment flow is intentionally a two-stage money movement flow:
+
+1. An active, signed agent request receives deterministic `ALLOW`.
+2. The gateway creates an Orders v2 order with `intent: AUTHORIZE` and returns the PayPal approval URL.
+3. The buyer approves on PayPal Checkout and is redirected to `/api/paypal/return`. The gateway retrieves the live order, checks PayPal reports `APPROVED`, revalidates agent + consent + original decision and checks order reference, custom agent ID, merchant payee, amount and currency before calling `POST /v2/checkout/orders/{id}/authorize`.
+4. The authorization ID, amount, currency, status and payment state transition are stored.
+5. A merchant logs into the dashboard and explicitly issues a 10-minute Capture Approval. The gateway verifies agent status, live consent, policy expiry/enabled state, amount, currency, merchant identity, order association and authorization association.
+6. The merchant confirms capture using that approval. The gateway atomically claims the approval token, revalidates the preconditions, and calls `POST /v2/payments/authorizations/{authorization_id}/capture` with a stable `PayPal-Request-Id`.
+7. An eligible uncaptured authorization can be voided through `POST /v2/payments/authorizations/{authorization_id}/void`.
+
+Buyer checkout return and human capture approval are separate. A webhook never creates a human approval.
+
+### PayPal webhook configuration
+
+Register the HTTPS endpoint in the PayPal Developer Dashboard for the sandbox REST app:
+
+```text
+https://YOUR_PUBLIC_HOST/api/paypal/webhook
+```
+
+Select the order, authorization and capture events required for reconciliation. Store the webhook ID in `PAYPAL_WEBHOOK_ID`. The endpoint reads the original request body as text, passes it with PayPal transmission headers to `/v1/notifications/verify-webhook-signature`, and accepts only `verification_status: SUCCESS`. It stores the PayPal event ID with a unique constraint before processing so repeated deliveries are idempotent. Verified events update only reconciliation state; a webhook event is not proof of buyer or merchant consent.
+
+The sandbox endpoint defaults to `https://api-m.sandbox.paypal.com`. Set `PAYPAL_ENVIRONMENT=LIVE` only in an intentionally separate production deployment; this project was requested for sandbox testing.
+
+### Payment API
+
+- `POST /api/agent/checkout` — signed agent checkout request; returns the PayPal approval URL only after policy ALLOW.
+- `GET /api/paypal/return?token={ORDER_ID}` — buyer return; confirms PayPal approval and authorizes the order.
+- `GET /api/paypal/cancel?token={ORDER_ID}` — records buyer cancellation.
+- `POST /api/payments/capture-approval` — authenticated merchant approval request.
+- `POST /api/payments/capture` — execute capture using a short-lived capture approval ID.
+- `POST /api/payments/void` — void an uncaptured authorization.
+- `POST /api/paypal/webhook` — verified webhook reconciliation.
+- `GET /api/paypal/order/{id}` — retrieve a merchant-owned order with PayPal state.
+
+All state-changing operations are server-side. PayPal idempotency request IDs and payment transition records are used for order creation, authorization, capture, and void.
+
+### PayPal Agent Toolkit and APIMatic context
+
+The package `@paypal/agent-toolkit` is included and configured narrowly for sandbox order lookup only. State-changing tools remain disabled: create/authorize/capture/refund decisions are routed through deterministic AgentTrust Gateway policies and explicit merchant consent. The [PayPal Agent Toolkit](https://github.com/paypal/agent-toolkit) documentation explains the toolkit's TypeScript and sandbox configuration. APIMatic PayPal Context Plugin install command for a supported developer shell:
+
+```bash
+npx context-plugins install paypal
+```
+
+Toolkit installation in the development environment and APIMatic context plugin installation are separate from runtime payment credentials.
+
+### Payment tests
+
+Run:
+
+```bash
+npm test
+npm run lint
+npm run typecheck
+npx prisma generate
+npx prisma db push
+npm run build
+```
+
+Added Vitest coverage includes Orders v2 AUTHORIZE payload, inactive agent / non-ALLOW denial, raw-body webhook verification postback, duplicate event ID handling, invalid signature and stale transmission, plus exact decimal/currency/consent policy boundaries. Playwright smoke tests remain available for local application testing.
+
+Sandbox end-to-end results must be recorded only after a sandbox REST app and webhook ID are configured and the actual buyer approval/merchant capture path has been executed. No sandbox credentials are committed.
