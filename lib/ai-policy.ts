@@ -40,7 +40,7 @@ export async function draftPolicyFromNaturalLanguage(input: { description:string
 
 export async function assessTransactionRisk(input: {
   amount:string; currency:string; description?:string; agentName:string;
-  agentStatus:string; signatureVerified:boolean; consentActive:boolean;
+  agentStatus:string; latestStoredRequestSignatureVerified:boolean; consentActive:boolean;
   consentCap:string|null; policyMaxPerTx:string|null; policyDailyCap:string|null;
   deterministicDecision:string; deterministicReason:string;
 }) {
@@ -51,6 +51,7 @@ export async function assessTransactionRisk(input: {
       {role:"system",content:[
         "You are a transaction risk analyst for AgentTrust Gateway.",
         "Assess only the supplied facts. Do not invent fraud signals, identity verification, merchant history, or external facts.",
+        "The latestStoredRequestSignatureVerified field describes only the latest stored agent request, not cryptographic verification of this hypothetical transaction.",
         "Your output is advisory and never authorizes, captures, voids, blocks, or moves money.",
         "The deterministic gateway decision and reason are authoritative. If they say BLOCK or REQUIRE_APPROVAL, do not recommend bypassing them.",
         "List missing information explicitly. A LOW risk score is not a payment authorization."
