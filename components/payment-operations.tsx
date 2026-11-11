@@ -26,7 +26,7 @@ function CaptureForm({order,auth,busy,onPost}:{order:Order;auth:Auth;busy:boolea
  const [approval,setApproval]=useState("");
  return <div style={{marginTop:10}}>
   <div className="inline-note">Buyer approval and authorization are complete. A merchant must explicitly issue a separate capture approval. The approval is valid for 10 minutes and checks current consent, policy, amount, currency and merchant ownership.</div>
-  {!approval?<button className="btn" style={{marginTop:9}} disabled={busy} onClick={async()=>{const r=await fetch("/api/payments/capture-approval",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({orderId:order.id,authorizationId:auth.id,amount:order.amount,currency:order.currency,reason:"Merchant approved fulfillment"})});const d=await r.json();if(!r.ok)alert(d.error??"Approval failed.");else setApproval(d.approvalId);}}>Approve capture as merchant</button>:
+  {!approval?<button className="btn" style={{marginTop:9}} disabled={busy} onClick={async()=>{const r=await fetch("/api/payments/capture-approval",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({orderId:order.id,authorizationId:auth.paypalAuthorizationId,amount:order.amount,currency:order.currency,reason:"Merchant approved fulfillment"})});const d=await r.json();if(!r.ok)alert(d.error??"Approval failed.");else setApproval(d.approvalId);}}>Approve capture as merchant</button>:
   <button className="btn" style={{marginTop:9}} disabled={busy} onClick={async()=>{await onPost("/api/payments/capture",{approvalId:approval});setApproval("");}}>Confirm capture</button>}
  </div>;
 }
