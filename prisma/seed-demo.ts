@@ -1,119 +1,128 @@
 import { PrismaClient } from "@prisma/client";
-import { randomBytes, createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 /**
- * Creates clearly synthetic gateway data for judge walkthroughs.
- * All sample PaymentOrder IDs are SIMULATED-* and no PayPal API is called.
- * Run against a disposable local database only: npm run db:seed:demo
+ * Synthetic judge fixtures only. No PayPal endpoint is called and every sample
+ * request/order is labelled SIMULATED. Run only against a disposable local DB.
  */
 const prisma = new PrismaClient();
+const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
 async function main() {
   const email = process.env.DEMO_MERCHANT_EMAIL ?? "judge-demo@example.test";
-  const existing = await prisma.user.findUnique({ where: { email } });
-  const user = existing ?? await prisma.user.create({
-    data: {
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: {
       email,
       name: "AgentTrust Demo Merchant (SIMULATED)",
       passwordHash: "DEMO_ONLY_NO_LOGIN_PASSWORD",
     },
   });
 
-  const names = ["Verified Shopping Agent", "Unverified Research Agent", "Expired Travel Agent"];
-  const agents = [];
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i];
-    let agent = await prisma.agent.findFirst({ where: { userId: user.id, name } });
-    if (!agent) agent = await prisma.agent.create({
-      data: {
-        userId: user.id,
-        name,
-        status: i === 2 ? "ACTIVE" : "ACTIVE",
-        expiresAt: i === 2 ? new Date(Date.now() - 86_400_000) : null,
-      },
-    });
-    agents.push(agent);
-  }
-
-  // The verified agent receives a synthetic credential marker. The plaintext key is
-  // intentionally unavailable, so this fixture is not suitable for signed API calls.
-  const verifiedCredential = await prisma.agentCredential.findFirst({
-    where: { agentId: agents[0].id, keyId: "DEMO-VERIFIED-KEY" },
+  const verified = await prisma.agent.upsert({
+    where: { id: "demo-agent-verified" },
+    update: {},
+    create: { id: "demo-agent-verified", userId: user.id, name: "SIMULATED Verified Shopping Agent" },
   });
-  if (!verifiedCredential) await prisma.agentCredential.create({
-    data: {
-      agentId: agents[0].id,
-      keyId: "DEMO-VERIFIED-KEY",
-      secretHash: createHash("sha256").update(randomBytes(32)).digest("hex"),
-      algorithm: "HMAC-SHA256",
-      active: true,
+  const unverified = await prisma.agent.upsert({
+    where: { id: "demo-agent-unverified" },
+    update: {},
+    create: { id: "demo-agent-unverified", userId: user.id, name: "SIMULATED Unverified Research Agent" },
+  });
+  const expired = await prisma.agent.upsert({
+    where: { id: "demo-agent-expired" },
+    update: { expiresAt: new Date(Date.now() - 86_400_000) },
+    create: {
+      id: "demo-agent-expired",
+      userId: user.id,
+      name: "SIMULATED Expired Travel Agent",
+      expiresAt: new Date(Date.now() - 86_400_000),
     },
   });
 
-  const consent = await prisma.consent.findFirst({
-    where: { userId: user.id, agentId: agents[0].id, currency: "USD" },
-  }) ?? await prisma.consent.create({
-    data: {
+  const existingCredential = await prisma.agentCredential.findFirst({
+    where: { agentId: verified.id, keyId: "DEMO-VERIFIED-KEY" },
+  });
+  let oneTimeDemoSecret: string | undefined;
+  if (!existingCredential) {
+    oneTimeDemoSecret = randomBytes(32).toString("base64url");
+    await prisma.agentCredential.create({
+      data: {
+        agentId: verified.id,
+        keyId: "DEMO-VERIFIED-KEY",
+        secretHash: hash(oneTimeDemoSecret),
+        algorithm: "HMAC-SHA256",
+      },
+    });
+  }
+
+  const consent = await prisma.consent.upsert({
+    where: { id: "demo-consent" },
+    update: {},
+    create: {
+      id: "demo-consent",
       userId: user.id,
-      agentId: agents[0].id,
+      agentId: verified.id,
       spendingCap: "250.00",
       currency: "USD",
       expiresAt: new Date(Date.now() + 30 * 86_400_000),
     },
   });
-  const policy = await prisma.spendingPolicy.findFirst({
-    where: { userId: user.id, consentId: consent.id, name: "Judge demo policy" },
-  }) ?? await prisma.spendingPolicy.create({
-    data: {
+  const policy = await prisma.spendingPolicy.upsert({
+    where: { id: "demo-policy" },
+    update: {},
+    create: {
+      id: "demo-policy",
       userId: user.id,
       consentId: consent.id,
-      name: "Judge demo policy",
+      name: "SIMULATED Judge Demo Policy",
       maxPerTx: "100.00",
       dailyCap: "200.00",
       requireApprovalAbove: "50.00",
       currency: "USD",
-      enabled: true,
       expiresAt: new Date(Date.now() + 30 * 86_400_000),
     },
   });
 
   const scenarios = [
-    { label: "allowed", amount: "20.00", decision: "ALLOW", reason: "SIMULATED: inside transaction and daily limits" },
-    { label: "blocked", amount: "125.00", decision: "BLOCK", reason: "SIMULATED: exceeds per-transaction limit" },
-    { label: "approval-required", amount: "75.00", decision: "REQUIRE_APPROVAL", reason: "SIMULATED: above human approval threshold" },
+    ["SIMULATED-ALLOWED", "20.00", "ALLOW", "Inside per-transaction and daily caps"],
+    ["SIMULATED-BLOCKED", "125.00", "BLOCK", "Exceeds per-transaction cap"],
+    ["SIMULATED-APPROVAL-REQUIRED", "75.00", "REQUIRE_APPROVAL", "Above human approval threshold"],
   ] as const;
 
-  for (const item of scenarios) {
-    const requestId = `SIMULATED-${item.label.toUpperCase()}`;
-    const old = await prisma.agentRequest.findUnique({ where: { requestId } });
-    if (!old) await prisma.agentRequest.create({
-      data: {
-        agentId: agents[0].id,
+  for (const [requestId, amount, decision, reason] of scenarios) {
+    await prisma.agentRequest.upsert({
+      where: { requestId },
+      update: {},
+      create: {
+        agentId: verified.id,
         consentId: consent.id,
         policyId: policy.id,
         requestId,
-        nonce: `SIMULATED-NONCE-${item.label}`,
+        nonce: `SIMULATED-NONCE-${requestId}`,
         timestamp: new Date(),
+        // This is a fixture flag for dashboard display, not evidence of a real signed call.
         signatureValid: true,
         status: "EVALUATED",
-        amount: item.amount,
+        amount,
         currency: "USD",
-        decision: item.decision,
-        reason: item.reason,
+        decision,
+        reason: `SIMULATED: ${reason}`,
         ipAddress: "127.0.0.1 (SIMULATED)",
       },
     });
   }
 
-  // This record is a local fixture only. paypalOrderId is null and no remote call occurs.
-  const allowedRequest = await prisma.agentRequest.findUnique({
-    where: { requestId: "SIMULATED-ALLOWED" },
-  });
-  if (allowedRequest && !(await prisma.paymentOrder.findUnique({ where: { agentRequestId: allowedRequest.requestId } }))) {
-    const order = await prisma.paymentOrder.create({
-      data: {
-        agentId: agents[0].id,
-        agentRequestId: allowedRequest.requestId,
+  const request = await prisma.agentRequest.findUnique({ where: { requestId: "SIMULATED-ALLOWED" } });
+  if (request) {
+    await prisma.paymentOrder.upsert({
+      where: { agentRequestId: request.requestId },
+      update: {},
+      create: {
+        id: "demo-payment-simulated",
+        agentId: verified.id,
+        agentRequestId: request.requestId,
         merchantId: user.id,
         status: "CREATED",
         amount: "20.00",
@@ -121,36 +130,47 @@ async function main() {
         approvalUrl: null,
       },
     });
-    await prisma.paymentStateTransition.create({
-      data: {
-        paymentOrderId: order.id,
-        toStatus: "CREATED",
-        source: "DEMO_SEED",
-        reason: "SIMULATED ONLY: not a PayPal sandbox order.",
-      },
-    });
+    const demoOrder = await prisma.paymentOrder.findUnique({ where: { id: "demo-payment-simulated" } });
+    if (demoOrder) {
+      await prisma.paymentStateTransition.upsert({
+        where: { id: "demo-payment-transition" },
+        update: {},
+        create: {
+          id: "demo-payment-transition",
+          paymentOrderId: demoOrder.id,
+          toStatus: "CREATED",
+          source: "DEMO_SEED",
+          reason: "SIMULATED ONLY. paypalOrderId is null; no PayPal transaction exists.",
+        },
+      });
+    }
   }
 
   await prisma.auditLog.create({
     data: {
       userId: user.id,
       actorType: "DEMO_SEED",
-      actorId: "local-seed-script",
-      action: "DEMO_DATA_SEEDED",
+      actorId: "seed-demo",
+      action: "SIMULATED_DEMO_FIXTURES_CREATED",
       entityType: "DemoFixture",
       entityId: "SIMULATED",
       outcome: "CREATED",
-      reason: "Synthetic fixture rows only; no PayPal sandbox transactions were created.",
+      reason: "Synthetic records only. No sandbox PayPal orders, approvals, authorizations, captures, or voids.",
     },
   });
 
   console.log(JSON.stringify({
-    seeded: true,
+    simulated: true,
     merchantEmail: email,
-    labels: ["SIMULATED", "NOT REAL PAYPAL TRANSACTIONS"],
-    agents: agents.map((agent, i) => ({ id: agent.id, name: names[i], fixtureType: i === 0 ? "verified-marker" : i === 1 ? "unverified" : "expired" })),
-    requests: scenarios.map((x) => ({ id: `SIMULATED-${x.label.toUpperCase()}`, decision: x.decision })),
-    warning: "Demo data is synthetic. The marker credential cannot authenticate API calls. No PayPal network request was made.",
+    agents: [
+      { id: verified.id, type: "verified-demo-credential" },
+      { id: unverified.id, type: "unverified-no-credential" },
+      { id: expired.id, type: "expired" },
+    ],
+    requests: scenarios.map(([requestId, amount, decision]) => ({ requestId, amount, decision })),
+    payment: { id: "demo-payment-simulated", paypalOrderId: null, status: "CREATED", simulated: true },
+    oneTimeDemoSecret: oneTimeDemoSecret ?? "Credential already exists; not displayed again.",
+    warning: "Synthetic gateway fixtures only. Not genuine PayPal sandbox transactions. The demo secret is shown only at initial seed creation.",
   }, null, 2));
 }
 
