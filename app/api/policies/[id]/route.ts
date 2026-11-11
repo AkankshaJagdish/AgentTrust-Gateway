@@ -43,7 +43,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const dailyCap=body.dailyCap!==undefined?money(body.dailyCap):policy.dailyCap;
   const threshold=body.requireApprovalAbove===undefined?policy.requireApprovalAbove:body.requireApprovalAbove===null||body.requireApprovalAbove===""?null:money(body.requireApprovalAbove);
   if(code!==consent.currency||maxPerTx.lte(0)||dailyCap.lte(0)||maxPerTx.gt(consent.spendingCap)||dailyCap.gt(consent.spendingCap))return NextResponse.json({error:"Policy currency must match consent and positive limits must remain within its cap."},{status:400});
-  if(threshold&&(!threshold.gt(0)||threshold.gt(maxPerTx)))return NextResponse.json({error:"Approval threshold must be positive and no greater than the transaction limit."},{status:400});
+  if(threshold&&(!threshold.gt(0)||threshold.gte(maxPerTx)))return NextResponse.json({error:"Approval threshold must be positive and strictly below the transaction limit."},{status:400});
   const updated=await prisma.$transaction(async tx=>{
    const existing=await tx.spendingPolicyVersion.findUnique({where:{policyId_version:{policyId:id,version:policy.version}}});
    if(!existing)await tx.spendingPolicyVersion.create({data:{policyId:id,version:policy.version,snapshot:snapshot(policy),sourceText:policy.naturalLanguage??undefined,actorUserId:user.id}});
