@@ -23,7 +23,7 @@ A preview is not active and cannot affect enforcement.
 
 ## OpenAI configuration
 
-Set OPENAI_API_KEY in the deployment secret store. OPENAI_MODEL is optional and defaults to gpt-5.6-mini. Without the key, the dashboard, existing manual policies, deterministic enforcement and PayPal operations remain available; AI preview/risk endpoints return a clear 503 configuration error.
+Set OPENAI_API_KEY in the deployment secret store. OPENAI_MODEL is optional and defaults to gpt-6-luna. Without the key, the dashboard, existing manual policies, deterministic enforcement and PayPal operations remain available; AI preview/risk endpoints return a clear 503 configuration error.
 
 ## Endpoints
 
