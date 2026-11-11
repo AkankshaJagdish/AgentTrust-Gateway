@@ -29,9 +29,11 @@ describe("AI policy structured output examples",()=>{
   const parsed=PolicySpecSchema.parse({...base,currency:"EUR"});
   expect(()=>validatePolicySpec(parsed,consent)).toThrow(/must match/);
  });
- it("rejects human approval thresholds above the per-transaction cap",()=>{
-  const parsed=PolicySpecSchema.parse({...base,requireApprovalAbove:"55.00"});
-  expect(()=>validatePolicySpec(parsed,consent)).toThrow(/no greater than the per-transaction limit/);
+ it("rejects human approval thresholds at or above the per-transaction cap",()=>{
+  const above=PolicySpecSchema.parse({...base,requireApprovalAbove:"55.00"});
+  const equal=PolicySpecSchema.parse({...base,requireApprovalAbove:"50.00"});
+  expect(()=>validatePolicySpec(above,consent)).toThrow(/strictly below the per-transaction limit/);
+  expect(()=>validatePolicySpec(equal,consent)).toThrow(/strictly below the per-transaction limit/);
  });
  it("requires verification and expired-agent blocking in every activatable policy",()=>{
   const blockDisabled=PolicySpecSchema.parse({...base,blockExpiredAgents:false});
