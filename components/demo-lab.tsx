@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { demoEligibility } from "@/lib/demo-lab-eligibility";
 
-type Agent = { id: string; name: string; status: string };
-type Consent = { id: string; agentId: string; status: string; spendingCap: string; currency: string; expiresAt: string };
-type Policy = { id: string; consentId: string | null; enabled: boolean; maxPerTx: string; dailyCap: string; currency: string };
+type Agent = { id: string; name: string; status: string; expiresAt?: string | null };
+type Consent = { id: string; agentId: string; status: string; spendingCap: string; currency: string; expiresAt: string; createdAt: string };
+type Policy = { id: string; consentId: string | null; enabled: boolean; maxPerTx: string; dailyCap: string; currency: string; createdAt: string; expiresAt?: string | null; requireApprovalAbove?: string | null };
 type Audit = { id: string; action: string; outcome: string; reason: string | null; createdAt: string };
 type Result = {
   scenario: "A" | "B" | "C"; httpStatus: number; decision: string | null;
@@ -26,12 +27,16 @@ export function DemoLab({ agents, consents, policies, onCompleted }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [guide, setGuide] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const activeAgents = agents.filter(a => a.status === "ACTIVE");
+  const activeAgents = agents.filter(a => a.status === "ACTIVE" && (!a.expiresAt || new Date(a.expiresAt) > new Date()));
+  useEffect(() => {
+    if (!activeAgents.some(a => a.id === agentId)) setAgentId(activeAgents[0]?.id ?? "");
+  }, [agentId, agents]);
   const selectedAgent = activeAgents.find(a => a.id === agentId);
-  const consent = consents.filter(c => c.agentId === agentId && c.status === "ACTIVE" && c.currency === "USD" && new Date(c.expiresAt) > new Date()).at(0);
-  const policy = policies.find(p => p.consentId === consent?.id && p.enabled && p.currency === "USD");
-  const ready = Boolean(selectedAgent && consent && Number(consent.spendingCap) === 50 && policy &&
-    Number(policy.maxPerTx) >= 25 && Number(policy.dailyCap) >= 25);
+  const readiness = {
+    A: demoEligibility(selectedAgent, consents, policies, "A"),
+    B: demoEligibility(selectedAgent, consents, policies, "B"),
+    C: demoEligibility(selectedAgent, consents, policies, "C"),
+  };
   const allowed = results.C;
   const relevantOrder = orders.find(o => o.paypalOrderId === allowed?.orderId);
 
@@ -41,16 +46,18 @@ export function DemoLab({ agents, consents, policies, onCompleted }: {
   }
   useEffect(() => { if (allowed?.orderId) void refreshOrders(); }, [allowed?.orderId]);
   async function run(scenario: "A" | "B" | "C") {
-    if (!agentId || busy) return;
+    if (busy) return;
+    const state = readiness[scenario];
+    if (!state.ready) { setErrors(prev => ({ ...prev, [scenario]: state.missing.join(" ") })); return; }
     setBusy(scenario);
     setErrors(prev => ({ ...prev, [scenario]: "" }));
     try {
       const response = await fetch("/api/demo-lab/run", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentId, scenario }),
+        body: JSON.stringify({ agentId, scenario, consentId: state.consentId, policyId: state.policyId }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Demo request failed.");
+      const data = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status} without JSON.` }));
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${data.error ?? "Demo request failed."}`);
       setResults(prev => ({ ...prev, [scenario]: data as Result }));
       onCompleted();
       if (scenario === "C") await refreshOrders();
@@ -83,8 +90,11 @@ export function DemoLab({ agents, consents, policies, onCompleted }: {
       </ol>
       Each execution uses the production checkout handler. No transaction is simulated. The $25 allowed request counts toward the active daily cap.
     </div>}
-    {agentId && !ready && <div className="notice" style={{ marginTop: 12 }}>
-      Setup required: the selected agent needs a current USD $50 consent and an enabled USD policy allowing $25 per transaction and at least $25 daily. Create these using the existing dashboard controls above.
+    {!agentId && <div className="notice" role="status">Register an active agent to run the Demo Lab.</div>}
+    {agentId && !readiness.C.ready && <div className="notice" style={{ marginTop: 12 }} role="status">
+      <strong>Payment scenario setup:</strong>
+      <ul>{readiness.C.missing.map(item => <li key={item}>{item}</li>)}</ul>
+      Scenario A can run without consent or policy.
     </div>}
     <div className="demo-lab-scenarios">
       {scenarios.map(s => {
@@ -93,9 +103,10 @@ export function DemoLab({ agents, consents, policies, onCompleted }: {
           <h3>{s.id}. {s.title}</h3>
           <div className="panel-meta">{s.amount} · Expected HTTP {s.expected}</div>
           <p>{s.detail}</p>
-          <button className="btn" disabled={!ready || busy !== null} onClick={() => void run(s.id)}>
+          <button className="btn" disabled={busy !== null || !readiness[s.id].ready} onClick={() => void run(s.id)}>
             {busy === s.id ? "Running…" : `Run scenario ${s.id}`}
           </button>
+          {!readiness[s.id].ready && <div className="event-sub" style={{ marginTop: 8 }}>Unavailable: {readiness[s.id].missing.join(" ")}</div>}
           {errors[s.id] && <div className="demo-lab-error" role="alert">{errors[s.id]}</div>}
           {result && <div className="demo-lab-result" aria-live="polite">
             <dl>

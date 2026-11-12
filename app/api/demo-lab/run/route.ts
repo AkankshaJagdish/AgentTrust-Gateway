@@ -6,12 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { signAgentRequest } from "@/lib/agent-signatures";
 import { POST as productionCheckout } from "@/app/api/agent/checkout/route";
 import { isAgentExpired } from "@/lib/agent-expiry";
+import { demoEligibility } from "@/lib/demo-lab-eligibility";
 
 // Demo Lab calls the real checkout handler, including signature verification,
 // nonce replay checks, policy evaluation, audit logging and PayPal Orders v2.
 const inputSchema = z.object({
   agentId: z.string().min(1),
   scenario: z.enum(["A", "B", "C"]),
+  consentId: z.string().nullable().optional(),
+  policyId: z.string().nullable().optional(),
 });
 const path = "/api/agent/checkout";
 const limitPerDay = 20;
@@ -32,22 +35,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Select an active agent belonging to your merchant account." }, { status: 403 });
   }
 
-  // The policy engine selects the most recently created active USD consent.
-  // Require the precise demonstration configuration rather than changing limits.
-  const consent = await prisma.consent.findFirst({
-    where: { agentId: agent.id, userId: user.id, status: "ACTIVE", expiresAt: { gt: new Date() }, currency: "USD" },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!consent || !consent.spendingCap.eq("50.00")) {
-    return NextResponse.json({ error: "Demo setup: create an active USD 50.00 human consent for this agent (the latest active USD consent must have this cap)." }, { status: 409 });
-  }
-  const policy = await prisma.spendingPolicy.findFirst({
-    where: { userId: user.id, consentId: consent.id, enabled: true, currency: "USD", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-    orderBy: { createdAt: "desc" },
-  });
-  if (!policy || policy.maxPerTx.lt("25.00") || policy.dailyCap.lt("25.00") ||
-      (policy.requireApprovalAbove && policy.requireApprovalAbove.lt("25.00"))) {
-    return NextResponse.json({ error: "Demo setup: create an enabled USD policy for this consent with per-transaction and daily limits at least 25.00, and no approval threshold below 25.00." }, { status: 409 });
+  // Match the deterministic policy engine's newest-consent and newest-policy selection.
+  // Scenario A needs only an active merchant-owned agent and sandbox restrictions.
+  const [consents, policies] = input.scenario === "A" ? [[], []] : await Promise.all([
+    prisma.consent.findMany({where:{agentId:agent.id,userId:user.id,status:"ACTIVE",currency:"USD",expiresAt:{gt:new Date()}},orderBy:{createdAt:"desc"}}),
+    prisma.spendingPolicy.findMany({where:{userId:user.id,consent:{agentId:agent.id},enabled:true,currency:"USD"},orderBy:{createdAt:"desc"}}),
+  ]);
+  const eligibility = demoEligibility(agent,consents,policies,input.scenario);
+  if(!eligibility.ready)return NextResponse.json({error:eligibility.missing.join(" "),missingRequirements:eligibility.missing},{status:409});
+  if(input.scenario!=="A"&&(input.consentId!==eligibility.consentId||input.policyId!==eligibility.policyId)){
+    return NextResponse.json({error:"Demo setup changed. Refresh the dashboard and retry."},{status:409});
   }
 
   const since = new Date();
