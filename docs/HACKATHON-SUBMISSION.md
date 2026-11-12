@@ -93,7 +93,7 @@ order, authorization, and capture identifiers.
 - AG Grid Community for the merchant command center
 - PayPal REST OAuth and Orders v2
 - PayPal webhooks and signature verification
-- OpenAI Responses API, Structured Outputs, Zod
+- OpenAI Responses API, Structured Outputs, Zod (default model: GPT-6 Luna)
 - Vitest and Playwright
 
 ## Setup instructions
@@ -254,8 +254,8 @@ client secrets, buyer passwords, access tokens, or personal account details.
 - [ ] Record a public YouTube video under three minutes and add its URL to Devpost.
 - [ ] Paste the short and full descriptions, technology list, and AI tool explanation
   into the Devpost project form.
-- [ ] Confirm all demo credentials and personal data are hidden from the video.
-- [ ] Submit before the deadline shown in the supplied hackathon brief.
+- [ ] Confirm all demo credentials and personal data are hidden from the video; use no copyrighted music or unlicensed third-party material.
+- [ ] Submit before **November 13, 2026 at 1:30 a.m. IST** (deadline stated in the supplied hackathon brief).
 
 ## Current verification status
 
