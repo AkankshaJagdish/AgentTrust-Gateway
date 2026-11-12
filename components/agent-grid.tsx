@@ -19,6 +19,26 @@ export function AgentGrid({kind,rows}:{kind:"agents"|"requests"|"orders"|"polici
  if(kind==="policies")return [{field:"name",headerName:"Policy",pinned:"left",minWidth:160},{field:"consent.agent.name",headerName:"Agent",valueGetter:p=>p.data?.consent?.agent?.name},{field:"maxPerTx",headerName:"Per transaction",valueFormatter:p=>money(p.value)},{field:"dailyCap",headerName:"Daily cap",valueFormatter:p=>money(p.value)},{field:"currency"},{field:"enabled",headerName:"Status",cellRenderer:(p:ICellRendererParams<Row>)=><Status value={p.value?"ACTIVE":"SUSPENDED"}/>},{field:"expiresAt",headerName:"Expiry",valueFormatter:p=>p.value?new Date(p.value).toLocaleDateString():"No expiry"}];
  return [{field:"createdAt",headerName:"Timestamp",pinned:"left",minWidth:175,valueFormatter:p=>new Date(p.value).toLocaleString()},{field:"actorType",headerName:"Actor"},{field:"action",headerName:"Action",minWidth:200},{field:"entityType",headerName:"Entity"},{field:"outcome",cellRenderer:statusRenderer},{field:"reason",headerName:"Reason",minWidth:280,flex:1}];
  },[kind]);
- const defaults={sortable:true,filter:true,resizable:true};
- return <div><div className="toolbar"><input className="search" value={quick} onChange={e=>setQuick(e.target.value)} placeholder="Search across all columns…" aria-label="Quick search"/><span className="panel-meta">{rows.length} records · sort and filter each column</span></div><div className="ag-theme-quartz grid-wrap"><AgGridReact rowData={rows} columnDefs={columns} defaultColDef={defaults} quickFilterText={quick} pagination paginationPageSize={10} animateRows suppressCellFocus/></div></div>;
+ const defaults:ColDef<Row>={sortable:true,filter:true,resizable:true,minWidth:125,flex:1};
+ return <div className="ledger-grid-shell">
+  <div className="toolbar">
+    <input className="search" value={quick} onChange={e=>setQuick(e.target.value)} placeholder="Search across all columns…" aria-label="Quick search"/>
+    <span className="panel-meta">{rows.length} records · sort and filter each column</span>
+  </div>
+  <div className="ag-theme-quartz grid-wrap" role="region" aria-label={`${kind} ledger`}>
+    <AgGridReact
+      key={kind}
+      rowData={rows}
+      columnDefs={columns}
+      defaultColDef={defaults}
+      quickFilterText={quick}
+      pagination={rows.length > 0}
+      paginationPageSize={10}
+      suppressPaginationPanel={rows.length === 0}
+      overlayNoRowsTemplate={`<span class="ledger-empty-message">No ${kind} records yet.</span>`}
+      animateRows
+      suppressCellFocus
+    />
+  </div>
+</div>;
 }
