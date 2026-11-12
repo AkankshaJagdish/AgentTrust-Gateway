@@ -37,10 +37,14 @@ export async function POST(request: Request) {
 
   // Match the deterministic policy engine's newest-consent and newest-policy selection.
   // Scenario A needs only an active merchant-owned agent and sandbox restrictions.
-  const [consents, policies] = input.scenario === "A" ? [[], []] : await Promise.all([
-    prisma.consent.findMany({where:{agentId:agent.id,userId:user.id,status:"ACTIVE",currency:"USD",expiresAt:{gt:new Date()}},orderBy:{createdAt:"desc"}}),
-    prisma.spendingPolicy.findMany({where:{userId:user.id,consent:{agentId:agent.id},enabled:true,currency:"USD"},orderBy:{createdAt:"desc"}}),
-  ]);
+  const consents = input.scenario === "A" ? [] : await prisma.consent.findMany({
+    where:{agentId:agent.id,userId:user.id,status:"ACTIVE",currency:"USD",expiresAt:{gt:new Date()}},
+    orderBy:{createdAt:"desc"}
+  });
+  const policies = input.scenario === "A" ? [] : await prisma.spendingPolicy.findMany({
+    where:{userId:user.id,consent:{agentId:agent.id},enabled:true,currency:"USD"},
+    orderBy:{createdAt:"desc"}
+  });
   const eligibility = demoEligibility(agent,consents,policies,input.scenario);
   if(!eligibility.ready)return NextResponse.json({error:eligibility.missing.join(" "),missingRequirements:eligibility.missing},{status:409});
   if(input.scenario!=="A"&&(input.consentId!==eligibility.consentId||input.policyId!==eligibility.policyId)){
