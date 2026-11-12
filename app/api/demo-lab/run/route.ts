@@ -45,7 +45,17 @@ export async function POST(request: Request) {
     where:{userId:user.id,consent:{agentId:agent.id},enabled:true,currency:"USD"},
     orderBy:{createdAt:"desc"}
   });
-  const eligibility = demoEligibility(agent,consents,policies,input.scenario);
+  const eligibility = demoEligibility(
+    agent,
+    consents.map(consent => ({ ...consent, spendingCap: consent.spendingCap.toString() })),
+    policies.map(policy => ({
+      ...policy,
+      maxPerTx: policy.maxPerTx.toString(),
+      dailyCap: policy.dailyCap.toString(),
+      requireApprovalAbove: policy.requireApprovalAbove?.toString() ?? null,
+    })),
+    input.scenario
+  );
   if(!eligibility.ready)return NextResponse.json({error:eligibility.missing.join(" "),missingRequirements:eligibility.missing},{status:409});
   if(input.scenario!=="A"&&(input.consentId!==eligibility.consentId||input.policyId!==eligibility.policyId)){
     return NextResponse.json({error:"Demo setup changed. Refresh the dashboard and retry."},{status:409});
