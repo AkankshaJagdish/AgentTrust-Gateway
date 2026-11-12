@@ -97,7 +97,7 @@ Vitest covers decimal, signature and policy boundary behavior. Playwright includ
 - PayPal sandbox client ID and secret for live sandbox order create/authorize.
 - PayPal Identity OIDC integration is not wired and no PayPal identity claims are fabricated.
 - PayPal webhook ID plus public HTTPS endpoint for webhook registration, verification and reconciliation.
-- OpenAI key is optional for future policy explanation only, never payment authorization.
+- Gemini API key is optional for AI policy and risk assistance only, never payment authorization.
 
 ## Upstream references
 [PayPal AG Grid hackathon boilerplate](https://github.com/paypaldev/hackathon-paypal-ag-grid-boilerplate), [PayPal Agent Toolkit](https://github.com/paypal/agent-toolkit), [PayPal AI Toolkit](https://github.com/paypal/AI-Toolkit), and [PayPal MCP Server](https://github.com/paypal/paypal-mcp-server).
@@ -175,7 +175,7 @@ Sandbox end-to-end results must be recorded only after a sandbox REST app and we
 
 ## AI policy assistant
 
-Merchants can describe agent security and spending rules in natural language in the dashboard. The OpenAI Responses API uses Structured Outputs generated from a Zod schema; AgentTrust validates the result with decimal arithmetic and the selected active human-consent cap.
+Merchants can describe agent security and spending rules in natural language in the dashboard. The Google Gemini API uses structured JSON output validated by Zod; AgentTrust validates the result with decimal arithmetic and the selected active human-consent cap.
 
 The workflow is deliberately proposal-first:
 1. Choose an active, unexpired consent and describe the rules.
@@ -186,13 +186,13 @@ The workflow is deliberately proposal-first:
 
 Verified-agent requirements and expired-agent blocking are mandatory. They cannot be disabled by an AI-generated policy. The deterministic policy engine remains the only authority for ALLOW / BLOCK / REQUIRE_APPROVAL. “Above $30” means strictly greater than $30: $30.00 does not trigger the threshold; $30.01 does.
 
-The AI risk assessment uses supplied transaction and stored gateway facts. It is advisory and displayed alongside the deterministic policy result. It cannot authorize or move money. The OpenAI client is never given PayPal tools.
+The AI risk assessment uses supplied transaction and stored gateway facts. It is advisory and displayed alongside the deterministic policy result. It cannot authorize or move money. The Gemini client is never given PayPal tools.
 
 ### AI configuration
 
 After pulling this change, apply the added PolicyDraft, SpendingPolicyVersion and Agent.expiresAt schema with `npm run db:push` (back up an existing database first).
 
-Set `OPENAI_API_KEY` in the deployment secret store. `OPENAI_MODEL` is optional and defaults to `gpt-6-luna`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
+Set `GEMINI_API_KEY` in the deployment secret store. `GEMINI_MODEL` is optional and defaults to `gemini-2.5-flash`. Without an API key, all existing dashboard, manual policy, deterministic enforcement and PayPal features continue to work; only AI endpoints report that AI is not configured.
 
 API routes:
 - `POST /api/ai/policy/preview`

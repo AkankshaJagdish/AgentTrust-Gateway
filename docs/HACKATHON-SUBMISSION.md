@@ -31,7 +31,7 @@ payment order can be created.
 
 Merchants manage agents, consent, policies, requests, payment state, and audit
 history in an AG Grid command center. They can write spending rules in natural
-language; the OpenAI Responses API converts those rules into a structured policy
+language; the Google Gemini API converts those rules into a structured policy
 proposal. The server validates the proposal against the selected consent and
 requires the merchant to confirm activation. AI risk assessments are advisory.
 The deterministic policy engine remains authoritative.
@@ -64,7 +64,7 @@ It provides a practical control layer without delegating money movement to an LL
 
 ### AI usage
 
-The application uses the OpenAI JavaScript SDK and Responses API with Structured
+The application uses the @google/genai SDK and Gemini API with Structured
 Outputs generated from a Zod schema. A merchant describes a policy in natural
 language; the model returns a typed proposal. Server-side validation checks
 currency, consent cap, transaction/daily limits, approval threshold, and mandatory
@@ -93,7 +93,7 @@ order, authorization, and capture identifiers.
 - AG Grid Community for the merchant command center
 - PayPal REST OAuth and Orders v2
 - PayPal webhooks and signature verification
-- OpenAI Responses API, Structured Outputs, Zod (default model: GPT-6 Luna)
+- Google Gemini API, Structured Outputs, Zod (default model: Gemini 2.5 Flash)
 - Vitest and Playwright
 
 ## Setup instructions
@@ -113,7 +113,7 @@ cp .env.example .env
 Set `DATABASE_URL` to a disposable local PostgreSQL connection string and generate a random `SESSION_SECRET`.
 For live sandbox checkout, also set `PAYPAL_ENVIRONMENT=SANDBOX`,
 `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET`. For AI policy previews set
-`OPENAI_API_KEY`.
+`GEMINI_API_KEY`.
 
 ```bash
 npx prisma generate
@@ -232,7 +232,7 @@ Return to the dashboard. Show the authorization ID. Click the merchant capture
 approval action and then confirm capture. Show the capture ID and CAPTURED state.
 
 **2:25–2:45 — AI and safety**
-Show the natural-language policy preview and explain that OpenAI produces a
+Show the natural-language policy preview and explain that Gemini produces a
 validated proposal, not a payment decision. End by showing the audit trail and
 stating that no LLM tool can move money.
 

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { evaluatePolicy } from "@/lib/policy";
 import { assessTransactionRisk } from "@/lib/ai-policy";
 import { audit } from "@/lib/audit";
+import { aiErrorResponse, geminiModel } from "@/lib/ai-policy";
 import { isAgentExpired } from "@/lib/agent-expiry";
 
 const schema=z.object({agentId:z.string(),amount:z.string(),currency:z.string(),description:z.string().max(1000).optional()});
@@ -25,7 +26,7 @@ export async function POST(request:Request){
    deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason
   });
   const assessment=evaluation.decision==="ALLOW"?aiAssessment:{...aiAssessment,recommendation:"REVIEW" as const};
-  await audit({userId:user.id,actorType:"AI",actorId:"openai",action:"AI_TRANSACTION_RISK_ASSESSED",entityType:"Agent",entityId:agent.id,outcome:assessment.level,reason:assessment.summary,metadata:{deterministicDecision:evaluation.decision,amount:input.amount,currency:input.currency,assessment}});
+  await audit({userId:user.id,actorType:"AI",actorId:"gemini",action:"AI_TRANSACTION_RISK_ASSESSED",entityType:"Agent",entityId:agent.id,outcome:assessment.level,reason:assessment.summary,metadata:{provider:"gemini",model:geminiModel(),deterministicDecision:evaluation.decision,amount:input.amount,currency:input.currency,assessment}});
   return NextResponse.json({assessment,deterministicDecision:evaluation.decision,deterministicReason:evaluation.reason,advisoryOnly:true});
- }catch(e){const message=e instanceof Error?e.message:"Unable to assess transaction risk.";return NextResponse.json({error:message},{status:message.includes("OPENAI_API_KEY")?503:400});}
+ }catch(e){if(e instanceof z.ZodError)return NextResponse.json({error:"Invalid request."},{status:400});const result=aiErrorResponse(e);return NextResponse.json({error:result.message},{status:result.status});}
 }

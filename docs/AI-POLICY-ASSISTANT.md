@@ -2,7 +2,7 @@
 
 ## Runtime design
 
-The application uses the OpenAI JavaScript SDK Responses API with Structured Outputs (responses.parse + zodTextFormat). The model returns a schema-checked policy proposal. AgentTrust then validates all amounts, currency and the selected human-consent cap with decimal arithmetic.
+The application uses @google/genai structured JSON output with responseMimeType and responseJsonSchema. Zod validates every response server-side. The model returns a schema-checked policy proposal. AgentTrust then validates all amounts, currency and the selected human-consent cap with decimal arithmetic.
 
 The assistant never receives PayPal tools or payment endpoints. It has no function-calling tools. The policy preview endpoint persists a 30-minute draft. Only an authenticated merchant can activate that draft, and activation re-checks the draft expiry, one-time use, current consent status, currency and consent cap. The activation action is separately audited.
 
@@ -13,7 +13,7 @@ AI risk assessments receive only transaction and gateway information available t
 ## Workflow
 
 1. Merchant chooses active, unexpired human consent and enters plain-language rules.
-2. POST /api/ai/policy/preview asks OpenAI for a structured proposal and stores a short-lived PolicyDraft.
+2. POST /api/ai/policy/preview asks Gemini for a structured proposal and stores a short-lived PolicyDraft.
 3. Dashboard shows JSON, limits, clarifications and validation errors.
 4. Merchant explicitly confirms activation.
 5. POST /api/ai/policy/activate revalidates and atomically consumes the draft while creating an enabled policy and version 1 snapshot.
@@ -29,9 +29,9 @@ This change adds PolicyDraft, SpendingPolicyVersion and Agent.expiresAt. Apply t
 
 Back up an existing database before applying schema changes.
 
-## OpenAI configuration
+## Gemini configuration
 
-Set OPENAI_API_KEY in the deployment secret store. OPENAI_MODEL is optional and defaults to gpt-6-luna. Without the key, the dashboard, existing manual policies, deterministic enforcement and PayPal operations remain available; AI preview/risk endpoints return a clear 503 configuration error.
+Set GEMINI_API_KEY in the deployment secret store. GEMINI_MODEL is optional and defaults to gemini-2.5-flash. Without the key, the dashboard, existing manual policies, deterministic enforcement and PayPal operations remain available; AI preview/risk endpoints return a clear 503 configuration error.
 
 ## Endpoints
 
@@ -97,4 +97,4 @@ Confirm installation and tool availability in that environment before relying on
 
 The official TypeScript documentation identifies the PayPalAgentToolkit import from @paypal/agent-toolkit/ai-sdk, constructor options clientId/clientSecret/configuration, read-only order lookup action configuration.actions.orders.get=true, and tool discovery method getTools().
 
-AgentTrust keeps the action map to { orders: { get: true } }. It does not set ALL_TOOLS_ENABLED and does not pass toolkit tools into OpenAI policy/risk requests. All payment mutations remain behind deterministic AgentTrust REST services and explicit human capture approval.
+AgentTrust keeps the action map to { orders: { get: true } }. It does not set ALL_TOOLS_ENABLED and does not pass toolkit tools into Gemini policy/risk requests. All payment mutations remain behind deterministic AgentTrust REST services and explicit human capture approval.

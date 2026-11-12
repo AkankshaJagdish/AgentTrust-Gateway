@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { aiErrorResponse, geminiModel } from "@/lib/ai-policy";
 import { draftPolicyFromNaturalLanguage,validatePolicySpec } from "@/lib/ai-policy";
 
 const requestSchema=z.object({consentId:z.string().min(1),description:z.string().min(12).max(6000)});
@@ -19,7 +20,7 @@ export async function POST(request:Request){
    userId:user.id,consentId:consent.id,sourceText:input.description,
    structuredPolicy:JSON.stringify(spec),expiresAt:new Date(Date.now()+30*60_000)
   }});
-  await audit({userId:user.id,actorType:"AI",actorId:"openai",action:"AI_POLICY_DRAFT_CREATED",entityType:"PolicyDraft",entityId:draft.id,outcome:validation?"NEEDS_CLARIFICATION":"PREVIEWED",reason:validation??undefined,metadata:{model:process.env.OPENAI_MODEL||"gpt-5.6-mini",consentId:consent.id}});
+  await audit({userId:user.id,actorType:"AI",actorId:"gemini",action:"AI_POLICY_DRAFT_CREATED",entityType:"PolicyDraft",entityId:draft.id,outcome:validation?"NEEDS_CLARIFICATION":"PREVIEWED",reason:validation??undefined,metadata:{provider:"gemini",model:geminiModel(),consentId:consent.id}});
   return NextResponse.json({draftId:draft.id,policy:spec,canActivate:!validation&&spec.clarifications.length===0,validationError:validation,expiresAt:draft.expiresAt,consent:{id:consent.id,agentName:consent.agent.name,currency:consent.currency,spendingCap:consent.spendingCap.toString()}},{status:201});
- }catch(e){const message=e instanceof Error?e.message:"Unable to draft policy.";return NextResponse.json({error:message},{status:message.includes("OPENAI_API_KEY")?503:400});}
+ }catch(e){if(e instanceof z.ZodError)return NextResponse.json({error:"Invalid request."},{status:400});const result=aiErrorResponse(e);return NextResponse.json({error:result.message},{status:result.status});}
 }

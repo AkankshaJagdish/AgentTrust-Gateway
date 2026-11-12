@@ -35,10 +35,10 @@ services:
         value: ""
       - key: PAYPAL_WEBHOOK_ID
         value: ""
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-6-luna
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
       - key: PAYPAL_RETURN_URL
         value: ""
       - key: PAYPAL_CANCEL_URL

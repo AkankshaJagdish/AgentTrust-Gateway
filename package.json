@@ -33,7 +33,7 @@
     "react-dom": "19.2.8",
     "zod": "^4.1.12",
     "@paypal/agent-toolkit": "1.11.0",
-    "openai": "7.55.0"
+    "@google/genai": "^1.30.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
