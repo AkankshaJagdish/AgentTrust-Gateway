@@ -182,17 +182,26 @@ human approval from buyer checkout approval. The dashboard refreshes and shows t
 captured state, PayPal capture ID, payment transitions, and audit history. Do not
 describe a buyer approval or webhook as the merchant's capture approval.
 
-### Simulated seed data
+### Local seeded demo option
 
-For dashboard exploration only, a disposable local database can be populated with:
+For a disposable local database, run `npm run db:seed:demo`. The command creates a
+merchant login, a demo verified agent credential, unverified and expired agents,
+$250 USD consent, a $100 transaction/$200 daily policy, ALLOW/BLOCK/REQUIRE_APPROVAL
+request examples, and a simulated payment row. On first creation, the command prints
+a one-time merchant password, agent key ID, and agent secret. Save them locally;
+they are not shown again. The seeded agent key ID is `DEMO-VERIFIED-KEY`.
 
-```bash
-npm run db:seed:demo
-```
+To run the live signed scenarios against that local seed, set
+`AGENTTRUST_BASE_URL=http://localhost:3000`, `AGENT_KEY_ID=DEMO-VERIFIED-KEY`, and
+`AGENT_SECRET` to the one-time secret printed by the seed, then run
+`npm run demo:scenarios`. Its default $300 blocked amount exceeds the seeded $250
+consent cap, and its $25 allowed amount is within the seeded policy. For the hosted
+judge flow, create an ordinary merchant account and agent in the deployed dashboard
+instead; do not assume the local SQLite seed is present in Render.
 
 Seeded requests and the seeded payment row are synthetic. The seeded payment has
 no PayPal order ID and is not a genuine sandbox transaction. Use the live scenario
-runner above for genuine PayPal transaction identifiers.
+runner for genuine PayPal transaction identifiers.
 
 ## Demo script (target duration: 2 minutes 45 seconds)
 
