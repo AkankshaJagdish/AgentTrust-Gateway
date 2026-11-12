@@ -1,5 +1,5 @@
 import { beforeEach,describe,it,expect,vi } from "vitest";
-const generateContent=vi.fn();
+const { generateContent }=vi.hoisted(()=>({generateContent:vi.fn()}));
 vi.mock("server-only",()=>({}));
 vi.mock("@google/genai",()=>({GoogleGenAI:class{models={generateContent};}}));
 import {draftPolicyFromNaturalLanguage,assessTransactionRisk} from "@/lib/ai-policy";

@@ -4,7 +4,7 @@
 
 The application uses @google/genai structured JSON output with responseMimeType and responseJsonSchema. Zod validates every response server-side. The model returns a schema-checked policy proposal. AgentTrust then validates all amounts, currency and the selected human-consent cap with decimal arithmetic.
 
-The assistant never receives PayPal tools or payment endpoints. It has no function-calling tools. The policy preview endpoint persists a 30-minute draft. Only an authenticated merchant can activate that draft, and activation re-checks the draft expiry, one-time use, current consent status, currency and consent cap. The activation action is separately audited.
+The default model is `gemini-2.5-flash`, which Google documents as supporting structured output and a free tier. Check your AI Studio project quota and region. The SDK receives no payment tools.\n\nThe assistant never receives PayPal tools or payment endpoints. It has no function-calling tools. The policy preview endpoint persists a 30-minute draft. Only an authenticated merchant can activate that draft, and activation re-checks the draft expiry, one-time use, current consent status, currency and consent cap. The activation action is separately audited.
 
 The deterministic policy engine enforces active agent identity, signed agent requests, active and unexpired human consent, per-transaction cap, UTC-day spending cap, and the human approval threshold. A rule phrased “above $30” uses a strict greater-than comparison: $30.00 does not trigger the threshold; $30.01 does. Verified-agent requirements and expired-agent blocking are hard-coded invariants and cannot be disabled through natural language.
 
