@@ -91,7 +91,7 @@ npx prisma db push
 npm run build
 ```
 
-Vitest covers decimal, signature and policy boundary behavior. Playwright includes account registration/dashboard smoke coverage. These commands have not been executed in this GitHub-only session because no Node shell is exposed.
+Vitest covers decimal, signature and policy boundary behavior. Playwright includes account registration/dashboard smoke coverage. These commands have not been verified in this session: the available Node shell cannot resolve github.com or registry.npmjs.org, so dependencies and a complete checkout are unavailable.
 
 ## External credentials and remaining integrations
 - PayPal sandbox client ID and secret for live sandbox order create/authorize.
@@ -238,7 +238,7 @@ A genuine sandbox order is created only by the signed `/api/agent/checkout` flow
 ### QA test commands
 
 ```bash
-npm ci
+npm install
 npx prisma generate
 npm run lint
 npm run typecheck
