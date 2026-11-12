@@ -50,7 +50,7 @@ needs to know which agent is acting, which human consent applies, what the agent
 allowed to spend, and whether a payment has actually been approved and captured.
 It provides a practical control layer without delegating money movement to an LLM.
 
-### What is distinctive
+### Feature list
 
 - Cryptographic agent identity and replay protection.
 - Human-linked consent with currency-specific spending caps and expiry.
@@ -59,7 +59,7 @@ It provides a practical control layer without delegating money movement to an LL
 - Explicit human confirmation before policy activation.
 - PayPal Orders v2 AUTHORIZE, buyer approval, separate merchant capture approval,
   capture and void.
-- Verified webhook reconciliation and immutable payment/audit history.
+- Verified webhook reconciliation and persisted payment transition and audit history.
 - An operational AG Grid dashboard that exposes agent and payment state.
 
 ### AI usage
