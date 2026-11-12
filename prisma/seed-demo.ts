@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hash as bcryptHash } from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
 
 /**
@@ -10,13 +11,13 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 
 async function main() {
   const email = process.env.DEMO_MERCHANT_EMAIL ?? "judge-demo@example.test";
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: {
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  const oneTimeDemoPassword = existingUser ? undefined : randomBytes(24).toString("base64url");
+  const user = existingUser ?? await prisma.user.create({
+    data: {
       email,
       name: "AgentTrust Demo Merchant (SIMULATED)",
-      passwordHash: "DEMO_ONLY_NO_LOGIN_PASSWORD",
+      passwordHash: await bcryptHash(oneTimeDemoPassword!, 12),
     },
   });
 
@@ -169,6 +170,7 @@ async function main() {
     ],
     requests: scenarios.map(([requestId, amount, decision]) => ({ requestId, amount, decision })),
     payment: { id: "demo-payment-simulated", paypalOrderId: null, status: "CREATED", simulated: true },
+    oneTimeDemoPassword: oneTimeDemoPassword ?? "Merchant already exists; use its existing password.",
     oneTimeDemoSecret: oneTimeDemoSecret ?? "Credential already exists; not displayed again.",
     warning: "Synthetic gateway fixtures only. Not genuine PayPal sandbox transactions. The demo secret is shown only at initial seed creation.",
   }, null, 2));

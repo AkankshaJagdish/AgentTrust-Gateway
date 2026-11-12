@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: agenttrust-gateway
+    runtime: node
+    plan: 1c-2g
+    region: singapore
+    branch: main
+    buildCommand: npm install && npx prisma generate && DATABASE_URL=file:./build.db npx prisma db push && DATABASE_URL=file:./build.db npm run build
+    startCommand: npm run start:render
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: file:/var/data/agenttrust.db
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: APP_URL
+        fromService:
+          type: web
+          name: agenttrust-gateway
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: PAYPAL_ENVIRONMENT
+        value: SANDBOX
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_MERCHANT_ID
+        value: ""
+      - key: PAYPAL_WEBHOOK_ID
+        value: ""
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-6-luna
+      - key: PAYPAL_RETURN_URL
+        value: ""
+      - key: PAYPAL_CANCEL_URL
+        value: ""
+      - key: PAYPAL_WEBHOOK_URL
+        value: ""
+    disk:
+      name: agenttrust-sqlite-data
+      mountPath: /var/data
+      sizeGB: 1
