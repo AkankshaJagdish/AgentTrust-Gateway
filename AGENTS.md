@@ -25,3 +25,13 @@
 - Treat AI risk assessments as advisory. The deterministic gateway decision is authoritative.
 - Run npm run db:generate, npm run typecheck, npm run lint, npm test, and npm run build after changes. Do not claim these passed unless their output is available.
 - Do not assume a cloud Codex task inherits workstation MCP configuration or OAuth. Verify MCP initialization in the actual cloud session; if unavailable, continue using repository code and official public documentation without blocking application work.
+
+
+## Render and hackathon deployment
+
+- Keep the Render Blueprint in render.yaml aligned with the actual Prisma datasource. This project uses SQLite on a Render persistent disk; do not scale the service beyond one instance.
+- Keep APP_URL server-side and use Render's RENDER_EXTERNAL_URL for the public origin. PayPal return/cancel URLs must use the public HTTPS service origin, never localhost.
+- Keep PAYPAL_ENVIRONMENT=SANDBOX for the hackathon. Set REST credentials and webhook ID only in Render's secret environment settings.
+- Do not claim a live URL, transaction ID, passing build, or completed sandbox demo without checking the deployed service and PayPal sandbox records.
+- The current Render startup db push is a prototype bootstrap because the repo has no committed Prisma migration baseline. Replace it with reviewed migrations before production use.
+- The demo scenario runner uses a real signed checkout endpoint. The seed script creates synthetic dashboard fixtures only and must never be represented as real PayPal transactions.
