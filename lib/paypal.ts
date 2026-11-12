@@ -234,7 +234,6 @@ export async function createCaptureApproval(input: {
   if (totalAuthorizedRequests.gt(policy.dailyCap)) throw new PayPalError("The current UTC-day authorized request total exceeds the active daily policy cap.");
   if (code !== order.currency || code !== authorization.currency) throw new PayPalError("Currency must match the original order and authorization.");
   if (!amount.eq(order.amount) || !amount.eq(authorization.amount) || amount.gt(consent.spendingCap) || amount.gt(policy.maxPerTx)) throw new PayPalError("Capture amount must exactly equal the authorized and consented amount and remain inside policy limits.");
-  if (authorization.status === "CAPTURED" || authorization.status === "VOIDED") throw new PayPalError("Authorization is already terminal.");
   const approval = await prisma.captureApproval.create({ data: {
     paymentOrderId: order.id, authorizationId: authorization.id, userId: input.userId,
     approvedAmount: amount, currency: code, merchantId: input.merchantId,

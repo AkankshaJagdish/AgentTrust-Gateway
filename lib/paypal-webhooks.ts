@@ -134,9 +134,9 @@ export async function receivePayPalWebhook(headers:WebhookHeaders,rawBody:string
   }}).catch(async error=>{
     const raced=await prisma.paymentEvent.findUnique({where:{paypalEventId:event.id}});
     if(raced?.processedAt)return null;
-    if(raced)return processVerifiedEvent(raced.id,JSON.parse(raced.rawBody) as PayPalWebhook,raced.paymentOrderId);
+    if(raced)return raced;
     throw error;
   });
   if(!record)return {duplicate:true,eventId:event.id};
-  return processVerifiedEvent(record.id,event,order?.id??null);
+  return processVerifiedEvent(record.id,JSON.parse(record.rawBody) as PayPalWebhook,record.paymentOrderId);
 }

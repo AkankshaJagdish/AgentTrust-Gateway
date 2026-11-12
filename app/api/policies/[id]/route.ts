@@ -27,7 +27,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
   const consent=await prisma.consent.findFirst({where:{id:policy.consentId,userId:user.id,status:"ACTIVE",expiresAt:{gt:new Date()}}});
   const disableOnly=body.enabled===false&&Object.keys(body).length===1;
   if(!consent&&!disableOnly)return NextResponse.json({error:"Human consent is revoked or expired; policy cannot be edited or enabled."},{status:409});
-  if(!consent&&disableOnly){
+  if(!consent){
    const disabled=await prisma.$transaction(async tx=>{
     const existing=await tx.spendingPolicyVersion.findUnique({where:{policyId_version:{policyId:id,version:policy.version}}});
     if(!existing)await tx.spendingPolicyVersion.create({data:{policyId:id,version:policy.version,snapshot:snapshot(policy),sourceText:policy.naturalLanguage??undefined,actorUserId:user.id}});

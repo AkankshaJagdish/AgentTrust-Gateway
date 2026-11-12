@@ -16,7 +16,7 @@ export async function GET(request:Request) {
     await audit({
       userId:order.merchantId,actorType:"PAYPAL",action:"BUYER_APPROVED_ORDER_AUTHORIZED",
       entityType:"PaymentOrder",entityId:order.id,outcome:"AUTHORIZED",
-      metadata:{authorizationId:authorization?.paypalAuthorizationId??authorization?.id},
+      metadata:{authorizationId:"paypalAuthorizationId" in authorization ? authorization.paypalAuthorizationId : authorization.id},
     });
     return redirect("authorized");
   } catch(error) {
