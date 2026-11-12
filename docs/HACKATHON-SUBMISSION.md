@@ -89,7 +89,7 @@ order, authorization, and capture identifiers.
 ### Technology
 
 - Next.js App Router, React, TypeScript
-- Prisma ORM and SQLite (Render persistent disk deployment profile)
+- Prisma ORM v6 and PostgreSQL (Render Free web/database deployment profile)
 - AG Grid Community for the merchant command center
 - PayPal REST OAuth and Orders v2
 - PayPal webhooks and signature verification
@@ -110,7 +110,7 @@ npm install
 cp .env.example .env
 ```
 
-Set at least `DATABASE_URL=file:./dev.db` and a random `SESSION_SECRET`.
+Set `DATABASE_URL` to a disposable local PostgreSQL connection string and generate a random `SESSION_SECRET`.
 For live sandbox checkout, also set `PAYPAL_ENVIRONMENT=SANDBOX`,
 `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET`. For AI policy previews set
 `OPENAI_API_KEY`.
@@ -184,7 +184,7 @@ describe a buyer approval or webhook as the merchant's capture approval.
 
 ### Local seeded demo option
 
-For a disposable local database, run `npm run db:seed:demo`. The command creates a
+For a disposable local PostgreSQL database, run `npm run db:seed:demo`. The command creates a
 merchant login, a demo verified agent credential, unverified and expired agents,
 $250 USD consent, a $100 transaction/$200 daily policy, ALLOW/BLOCK/REQUIRE_APPROVAL
 request examples, and a simulated payment row. On first creation, the command prints
@@ -197,7 +197,7 @@ To run the live signed scenarios against that local seed, set
 `npm run demo:scenarios`. Its default $300 blocked amount exceeds the seeded $250
 consent cap, and its $25 allowed amount is within the seeded policy. For the hosted
 judge flow, create an ordinary merchant account and agent in the deployed dashboard
-instead; do not assume the local SQLite seed is present in Render.
+instead; do not assume the local PostgreSQL seed is present in Render.
 
 Seeded requests and the seeded payment row are synthetic. The seeded payment has
 no PayPal order ID and is not a genuine sandbox transaction. Use the live scenario
@@ -272,3 +272,7 @@ This document is a prepared submission draft and test procedure. It does not cla
 that Render has been provisioned, that a public deployment URL exists, that
 PayPal sandbox transactions have been completed, that the full demo script has
 passed, or that a YouTube video or Devpost entry has been submitted.
+
+## Zero-cost deployment note (November 2026)
+
+The Blueprint deploys a Free Node.js web service and a Free PostgreSQL database, both in Singapore, with no persistent web disk. The PostgreSQL instance expires after 30 days and provides no backups. Live sandbox order/authorization/capture and AI model results are not claimed until verified. Review [Render instructions](RENDER-DEPLOYMENT.md) and its disposable PostgreSQL testing commands. A free web service may cold-start after sleeping; database records persist independently during sleep.

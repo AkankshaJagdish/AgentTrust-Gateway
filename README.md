@@ -12,7 +12,7 @@ Merchant-side infrastructure for verifying AI agents, enforcing human-linked spe
 - AI is not permitted to authorize, capture, refund, or move funds.
 
 ## Quick start
-Requires Node.js 20.9+ and npm. PayPal sandbox credentials are optional for the app/dashboard and required to call PayPal.
+Requires Node.js 22 and npm, plus PostgreSQL 16+. PayPal sandbox credentials are optional for the app/dashboard and required to call PayPal.
 
 ```bash
 git clone https://github.com/AkankshaJagdish/AgentTrust-Gateway.git
@@ -21,7 +21,7 @@ npm install
 cp .env.example .env
 ```
 
-Configure `DATABASE_URL`, `SESSION_SECRET`, and for PayPal sandbox calls set `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. Keep secrets out of source control.
+Configure `DATABASE_URL` to a PostgreSQL URL, `SESSION_SECRET`, and for PayPal sandbox calls set `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. Keep secrets out of source control.
 
 ```bash
 npx prisma generate
@@ -29,7 +29,7 @@ npx prisma db push
 npm run dev
 ```
 
-Go to http://localhost:3000 and create a merchant account. The console reads persisted SQLite records; it does not show fictitious traffic.
+Go to http://localhost:3000 and create a merchant account. The console reads persisted PostgreSQL records; it does not show fictitious traffic.
 
 ## Agent signing contract
 
@@ -219,7 +219,7 @@ MCP and APIMatic are optional development aids, not application runtime dependen
 
 ## Judge walkthrough and demo fixtures
 
-For a disposable local database only, configure `.env`, then run:
+For a disposable PostgreSQL database only, configure `.env`, then run:
 
 ```bash
 npm install
@@ -252,8 +252,8 @@ See [database migration status and instructions](docs/DATABASE-MIGRATIONS.md). T
 
 ## Render deployment and hackathon demo
 
-A Render Blueprint is provided in `render.yaml`. It runs the existing SQLite/Prisma application with a persistent disk at `/var/data`, configures a generated session secret, and reads the public Render URL for PayPal redirects. The deployment requires a paid single-instance Render web service because persistent disks are not available on free web services. See [Render deployment instructions](docs/RENDER-DEPLOYMENT.md) for environment variables, sandbox app setup, webhook registration, health checks, and operational limitations.
+A Render Blueprint is provided in `render.yaml`. It runs the existing Prisma application on PostgreSQL, configures a generated session secret, and reads the public Render URL for PayPal redirects. The Blueprint provisions a free Render web service and a free Render PostgreSQL database in Singapore; no persistent disk or payment is required. Free PostgreSQL expires after 30 days. See [Render deployment instructions](docs/RENDER-DEPLOYMENT.md) for environment variables, sandbox app setup, webhook registration, health checks, and operational limitations.
 
 The repeatable live demo runner is `npm run demo:scenarios`. It sends unsigned, signed over-cap, and signed allowed requests to the configured application. The allowed scenario creates a real PayPal sandbox order only when sandbox credentials are configured. Buyer approval and merchant capture approval remain interactive steps. See [the hackathon submission and judge guide](docs/HACKATHON-SUBMISSION.md) for the full A–D workflow, Devpost copy, demo script, and video storyboard.
 
-**Deployment note:** this project has not yet established a checked-in Prisma migration baseline. The Render start command runs `prisma db push` against its persistent SQLite file as a prototype bootstrap. This is documented as a temporary deployment approach, not a substitute for reviewed production migrations. The SQLite disk service must remain single-instance and Render disk deployments have downtime during deploys.
+**Deployment note:** Render Free PostgreSQL is separate from the sleeping web service, so application data survives web sleep and wake, but the free database expires after 30 days. No existing SQLite rows are transferred automatically. On first boot `prisma db push` creates the tables without `--accept-data-loss`; later incompatible schema edits fail rather than deleting data. The build uses a deliberately unreachable placeholder PostgreSQL URL to ensure it never needs a live database. See [Render deployment instructions](docs/RENDER-DEPLOYMENT.md) and [PostgreSQL testing](docs/RENDER-DEPLOYMENT.md#local-postgresql-and-tests).

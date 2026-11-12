@@ -1,11 +1,13 @@
+# Hackathon-only free deployment: one web instance + one PostgreSQL instance.
+# Render Free Postgres expires 30 days after creation; it is not permanent storage.
 services:
   - type: web
     name: agenttrust-gateway
     runtime: node
-    plan: 1c-2g
+    plan: free
     region: singapore
     branch: main
-    buildCommand: npm install && npx prisma generate && DATABASE_URL=file:./build.db npx prisma db push && DATABASE_URL=file:./build.db npm run build
+    buildCommand: npm install --include=dev && DATABASE_URL=postgresql://build:build@127.0.0.1:5432/agenttrust_build npm run build
     startCommand: npm run start:render
     healthCheckPath: /api/health
     autoDeployTrigger: commit
@@ -13,7 +15,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: file:/var/data/agenttrust.db
+        fromDatabase:
+          name: agenttrust-gateway-db
+          property: connectionString
       - key: SESSION_SECRET
         generateValue: true
       - key: APP_URL
@@ -41,7 +45,11 @@ services:
         value: ""
       - key: PAYPAL_WEBHOOK_URL
         value: ""
-    disk:
-      name: agenttrust-sqlite-data
-      mountPath: /var/data
-      sizeGB: 1
+
+databases:
+  - name: agenttrust-gateway-db
+    plan: free
+    region: singapore
+    databaseName: agenttrust
+    user: agenttrust
+    ipAllowList: []

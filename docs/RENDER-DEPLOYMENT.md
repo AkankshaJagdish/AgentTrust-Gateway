@@ -1,137 +1,76 @@
-# Render deployment
+# Render Free deployment — AgentTrust Gateway
 
-AgentTrust Gateway currently uses Prisma with SQLite. The supplied Render Blueprint
-attaches a persistent disk at `/var/data` and points Prisma to
-`file:/var/data/agenttrust.db`. This preserves the existing SQLite implementation
-without silently converting the application to PostgreSQL.
+This hackathon Blueprint uses **a free Node.js web service and a free PostgreSQL database** in Render's `singapore` region. No persistent disk, no paid resources, no production PayPal credentials. Database data persists while the web service sleeps, restarts, or redeploys. It **does not** automatically persist beyond the free PostgreSQL database's 30-day expiry. Render Free Postgres has a 1 GB limit and no backups; use only disposable sandbox/demo data.
 
-## Important operating constraints
+## Before deployment
 
-- Render persistent disks require a paid web service. The Blueprint selects
-  `1c-2g` and a 1 GB disk; confirm current pricing in your Render workspace before
-  creating the service.
-- A disk is attached to one service instance only. Do not scale this SQLite service
-  horizontally. Render disables zero-downtime deploys for services with a disk.
-- Render disks are available only at runtime, not during build or pre-deploy
-  commands. The Blueprint therefore creates a temporary `build.db` for Prisma
-  schema generation/build-time work, then the configured `start:render` command
-  runs Prisma `db push` against the mounted `/var/data/agenttrust.db` before
-  starting Next.js. The temporary build database is not the runtime database.
-- This `db push` startup step is a bootstrap/workaround because the repository has
-  not yet established a checked-in Prisma migration baseline. It is not a substitute
-  for reviewed production migrations. Back up the disk before schema changes and
-  establish a migration baseline before treating this as a long-lived production
-  service.
-- The deployment configuration is prepared in `render.yaml`; no Render service
-  has been created or deployed by this repository change.
+- The Prisma v6 schema now uses `provider = "postgresql"`. All existing models, relations, enum members, compound unique constraints, indexes, and `Decimal(18,2)` annotations are retained. No application/payment routes are intentionally changed.
+- This change creates a **new empty PostgreSQL schema**. It does not copy existing SQLite data. Back up any existing SQLite file and migrate row data separately if needed; for the hackathon, create a fresh demo merchant.
+- The repository has no checked-in Prisma migration history. `start:render` runs `prisma db push && next start --hostname 0.0.0.0`. This creates or checks tables on each boot. **No** `--accept-data-loss`, `--force-reset`, `migrate reset`, or demo seed runs on startup. Any incompatible drift must stop deployment for manual review. Do not treat this as a production migration strategy.
+- The build command uses `DATABASE_URL=postgresql://build:build@127.0.0.1:5432/agenttrust_build` **only during build**, to ensure Prisma client generation and Next build do not depend on a live DB. Render supplies the real internal `DATABASE_URL` when starting the app. The placeholder contains no actual credentials.
+- `npm install --include=dev` keeps the Prisma CLI present for client generation and startup, even if `NODE_ENV=production`.
+- The free service has 512 MB memory, may sleep when idle, and may cold-start slowly; the `/api/health` endpoint performs `SELECT 1` and returns 503 if PostgreSQL cannot be reached. Data survives sleep because it is not stored on the web filesystem.
 
-## Deploy from GitHub
+## Deploy from GitHub (manual Render setup)
 
-1. Merge the deployment PR into `main`. The Blueprint is configured to deploy the `main` branch.
-2. In Render, choose **New → Blueprint** and connect
-   `AkankshaJagdish/AgentTrust-Gateway`.
-3. Select `render.yaml` from the repository. Confirm the service is in Singapore
-   and that the selected paid plan supports a persistent disk.
-4. Enter the secret values requested by the Blueprint. Do not put them in GitHub,
-   `render.yaml`, build logs, or the demo video.
-5. Create the Blueprint and wait for the deploy to finish.
-6. In the service dashboard, verify `APP_URL` equals the generated
-   `RENDER_EXTERNAL_URL`. The app derives PayPal return/cancel URLs from this
-   public origin unless explicit URLs are configured.
-7. Verify `https://<your-render-host>/api/health` returns HTTP 200 with
-   `{"status":"ok","database":"connected"}`.
-8. Open the dashboard, create a merchant account, and verify that data remains
-   after a service restart/redeploy.
+1. Verify this change is on `main`, and `LICENSE` is MIT.
+2. In Render, choose **New → Blueprint** and connect `AkankshaJagdish/AgentTrust-Gateway`; select `render.yaml` on `main`.
+3. Confirm the Blueprint preview lists **agenttrust-gateway** (web service **Free**, Singapore) and **agenttrust-gateway-db** (PostgreSQL **Free**, Singapore). Do **not** approve any priced plan. If your workspace already has a Free PostgreSQL instance, Render may reject a second one; adapt the Blueprint to reference an existing database instead of purchasing anything.
+4. Set `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` using a **PayPal sandbox REST app** only. Set `OPENAI_API_KEY` privately if demonstrating the AI assistant. Do not paste any secrets into GitHub, build commands, chat, or demo recordings. `SESSION_SECRET` is generated by Render. `DATABASE_URL` is inherited from the database internal connection string; never replace it with an external connection URL in the web service.
+5. Apply the Blueprint. The first start runs non-destructive Prisma schema bootstrap, then listens on Render's `PORT` through Next.js. Review the deploy log. A successful startup must not be inferred solely from a Blueprint being created.
+6. Visit `https://<your-render-host>/api/health` and confirm HTTP 200 and `{"status":"ok","database":"connected"}`. Create a disposable merchant login; redeploy/sleep/wake, then confirm it still works. If the health check fails, inspect the Render logs; common causes are database provisioning, schema bootstrap errors, or unavailable Free resources.
+7. Verify `APP_URL` is the actual public HTTPS `RENDER_EXTERNAL_URL`. Unless overridden, the application uses `APP_URL/api/paypal/return` and `APP_URL/api/paypal/cancel` for PayPal redirects. These must be public HTTPS addresses; do not point callbacks at localhost.
+8. In the PayPal **sandbox** developer dashboard, register `https://<your-render-host>/api/paypal/webhook` for the required order/authorization/capture events. Copy its **webhook ID** into the Render web service's `PAYPAL_WEBHOOK_ID` secret setting and redeploy. `PAYPAL_WEBHOOK_URL` is an optional documentation/configuration variable; webhook subscription itself must be created in PayPal.
+9. Configure sandbox buyer and seller accounts, run `npm run demo:scenarios` as described in [HACKATHON-SUBMISSION.md](HACKATHON-SUBMISSION.md), approve buyer checkout, and perform separate merchant capture approval. Keep actual transaction IDs only in private verification notes or scrubbed screenshots.
 
-## Environment variables
+## Runtime environment variables
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `DATABASE_URL` | Yes | SQLite file on the persistent disk: `file:/var/data/agenttrust.db`. |
-| `SESSION_SECRET` | Yes | Random secret for session signing/hashing; Render generates it in the Blueprint. |
-| `APP_URL` | Yes in deployment | Public application origin. Blueprint self-references Render's `RENDER_EXTERNAL_URL`. |
-| `PAYPAL_ENVIRONMENT` | Yes | Keep `SANDBOX`; do not switch to LIVE for the hackathon demo. |
-| `PAYPAL_CLIENT_ID` | Yes for payments | PayPal Developer Dashboard sandbox REST app client ID. |
-| `PAYPAL_CLIENT_SECRET` | Yes for payments | Matching sandbox REST app secret. Server-side only. |
-| `PAYPAL_MERCHANT_ID` | Optional | Sandbox receiving merchant ID if the order should explicitly target a payee. |
-| `PAYPAL_RETURN_URL` | Optional | Full public buyer-return URL; defaults to `APP_URL/api/paypal/return`. |
-| `PAYPAL_CANCEL_URL` | Optional | Full public buyer-cancel URL; defaults to `APP_URL/api/paypal/cancel`. |
-| `PAYPAL_WEBHOOK_URL` | For webhook testing | Public URL to register in PayPal: `APP_URL/api/paypal/webhook`. Documentation/configuration value; PayPal sends to the registered URL. |
-| `PAYPAL_WEBHOOK_ID` | Yes for webhooks | Webhook ID returned by the PayPal sandbox app's webhook registration. |
-| `OPENAI_API_KEY` | Optional | OpenAI API key for natural-language policy previews and advisory risk assessment. |
-| `OPENAI_MODEL` | Optional | Defaults to `gpt-6-luna`. |
+| Name | Value / source |
+|---|---|
+| `DATABASE_URL` | Render `fromDatabase: connectionString` (internal PostgreSQL URL), never checked in |
+| `SESSION_SECRET` | Render-generated secret |
+| `APP_URL` | Self-reference to Render's external HTTPS URL |
+| `PAYPAL_ENVIRONMENT` | `SANDBOX`; do not change for hackathon |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | Privately supplied sandbox REST app keys |
+| `PAYPAL_MERCHANT_ID` | Optional sandbox payee/merchant ID |
+| `PAYPAL_WEBHOOK_ID` | Sandbox webhook ID after manual registration |
+| `OPENAI_API_KEY` | Optional, private; required for AI policy preview |
+| `OPENAI_MODEL` | `gpt-6-luna` default; must be available to the supplied API key |
+| `PAYPAL_RETURN_URL`, `PAYPAL_CANCEL_URL` | Optional overrides, otherwise computed from `APP_URL` |
+| `PAYPAL_WEBHOOK_URL` | Optional reference variable; does not register a webhook |
+| `NODE_ENV` | `production` |
 
-Never use the browser's PayPal client ID as a substitute for the server-side REST
-client secret. Never expose either secret to client-side code.
+`AGENT_SIGNING_SECRET` is a reserved example variable, not needed for signed-agent enrollment; actual one-time agent secrets are generated by the application and stored hashed. Never copy the example placeholder into a real signing workflow.
 
-## Configure PayPal sandbox
+## Local PostgreSQL and tests
 
-1. Sign in to the PayPal Developer Dashboard:
-   https://developer.paypal.com/dashboard/
-2. Select or create a sandbox business account and a sandbox personal (buyer)
-   account. Keep them separate.
-3. Under Apps & Credentials, create a REST app in the selected sandbox.
-4. Copy that app's sandbox Client ID and Secret into the Render environment
-   variables `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`.
-5. Keep `PAYPAL_ENVIRONMENT=SANDBOX`.
-6. Deploy/restart the service after saving the environment variables.
-7. In the same REST app, add a webhook using the deployed URL:
-   `https://<your-render-host>/api/paypal/webhook`.
-8. Subscribe at minimum to:
-   - `CHECKOUT.ORDER.APPROVED`
-   - `CHECKOUT.PAYMENT-APPROVAL.REVERSED`
-   - `PAYMENT.AUTHORIZATION.CREATED`
-   - `PAYMENT.AUTHORIZATION.VOIDED`
-   - `PAYMENT.CAPTURE.COMPLETED`
-   - `PAYMENT.CAPTURE.PENDING`
-   - `PAYMENT.CAPTURE.DENIED`
-   - `PAYMENT.CAPTURE.REFUNDED`
-9. Copy the webhook ID into `PAYPAL_WEBHOOK_ID` and redeploy.
-10. Send a PayPal test webhook from the Developer Dashboard and confirm a verified
-    event appears in the gateway audit/event history.
+Use a **disposable** PostgreSQL database, not your Render demo database, for schema verification and integration tests. With Docker available:
 
-The PayPal webhook belongs to the specific REST app and environment. A sandbox
-webhook ID is not a live webhook ID.
+```bash
+docker run --name agenttrust-test-pg -e POSTGRES_USER=agenttrust -e POSTGRES_PASSWORD=local-only-test -e POSTGRES_DB=agenttrust -p 127.0.0.1:5432:5432 -d postgres:16-alpine
+cp .env.example .env
+# Set DATABASE_URL=postgresql://agenttrust:local-only-test@127.0.0.1:5432/agenttrust
+npm install
+npx prisma validate
+npx prisma generate
+npx prisma db push
+npm run lint
+npm run typecheck
+npm test
+npm run build
+docker rm -f agenttrust-test-pg
+```
 
-## Configure OpenAI
+Do not use `--accept-data-loss`; delete/recreate only this clearly disposable test container if a test requires a clean DB. Unit tests may use mocks; integration tests require explicit PostgreSQL connection configuration. To verify the build is independent of live PostgreSQL, stop the test container and run:
 
-Create an API key in the OpenAI platform and set `OPENAI_API_KEY` in Render's
-Environment settings. Keep `OPENAI_MODEL=gpt-6-luna` unless you have verified
-another model supports the Responses API and Structured Outputs used by this code.
-The key is used only by server-side AI policy preview and risk assessment routes.
-The model receives no PayPal tools and cannot authorize, capture, void, or refund.
+```bash
+DATABASE_URL=postgresql://build:build@127.0.0.1:5432/agenttrust_build npm run build
+```
 
-## Public URLs
+If this fails because any app route queries PostgreSQL during static build, fix the build-time route behavior without changing runtime payment logic. The local shell used while preparing this change could not reach npmjs.org or github.com, so these exact npm/Prisma/test/build commands were **not** successfully executed here. GitHub Actions runner failure due account billing is unrelated to code and is not a deployment gate.
 
-After Render creates the service, copy its exact public URL from the Render
-Dashboard. Do not guess the service name or hostname.
+## Boundaries and failure handling
 
-- App: `https://<your-render-host>/`
-- Health: `https://<your-render-host>/api/health`
-- PayPal buyer return: `https://<your-render-host>/api/paypal/return`
-- PayPal buyer cancellation: `https://<your-render-host>/api/paypal/cancel`
-- PayPal webhook: `https://<your-render-host>/api/paypal/webhook`
+PayPal Orders v2 AUTHORIZE, buyer approval, authorization, explicit merchant capture approval, capture/void, verified webhooks, and the AI policy assistant remain in the code. Their live behavior is **not certified** by a successful static review. Render service sleep does not delete PostgreSQL data, but 30-day Free database expiry does. Render Free Postgres lacks backups and can be unavailable during maintenance. On waking, Next.js reconnects using the same internal `DATABASE_URL`; `prisma db push` is idempotent when schema is unchanged. If Render indicates any paid resource, cancel the Blueprint before applying it.
 
-Set explicit `PAYPAL_RETURN_URL` and `PAYPAL_CANCEL_URL` only if the paths differ.
-The application uses `APP_URL` (or Render's injected `RENDER_EXTERNAL_URL`) to
-construct defaults. Register the webhook URL in the PayPal Developer Dashboard;
-setting `PAYPAL_WEBHOOK_URL` alone does not register it.
-
-## Deployment verification checklist
-
-- [ ] Render deploy status is **Live** for the expected Git commit.
-- [ ] Build log shows dependency installation, `prisma generate`, and Next build succeeded.
-- [ ] `/api/health` returns HTTP 200 and confirms database connectivity.
-- [ ] Restart the service and confirm merchant/agent/policy data persists.
-- [ ] Merchant registration and login work over HTTPS.
-- [ ] Agent registration returns a one-time secret; do not save it in logs.
-- [ ] Unsigned checkout returns 403.
-- [ ] Over-cap signed checkout returns BLOCK.
-- [ ] Allowed signed checkout creates an actual sandbox PayPal order.
-- [ ] Buyer approval returns to the configured public return URL and authorization is stored.
-- [ ] Merchant explicitly issues capture approval and confirms capture.
-- [ ] PayPal order, authorization, capture IDs and audit transitions are visible.
-- [ ] A test webhook is cryptographically verified and duplicate delivery is idempotent.
-
-No deployed URL, successful Render deploy, real PayPal transaction ID, or passing
-production build is claimed by this configuration change.
+References: https://render.com/docs/free and https://render.com/docs/blueprint-spec.

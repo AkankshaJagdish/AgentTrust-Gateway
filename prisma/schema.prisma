@@ -3,15 +3,40 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-enum AgentStatus { ACTIVE SUSPENDED REVOKED }
-enum ConsentStatus { ACTIVE REVOKED EXPIRED }
-enum PolicyDecision { ALLOW BLOCK REQUIRE_APPROVAL }
-enum RequestStatus { VERIFIED REJECTED EVALUATED }
-enum PaymentStatus { CREATED APPROVED AUTHORIZED CAPTURED VOIDED FAILED PENDING CANCELLED }
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+enum PolicyDecision {
+  ALLOW
+  BLOCK
+  REQUIRE_APPROVAL
+}
+enum RequestStatus {
+  VERIFIED
+  REJECTED
+  EVALUATED
+}
+enum PaymentStatus {
+  CREATED
+  APPROVED
+  AUTHORIZED
+  CAPTURED
+  VOIDED
+  FAILED
+  PENDING
+  CANCELLED
+}
 
 model User {
   id String @id @default(cuid())
