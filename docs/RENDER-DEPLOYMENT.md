@@ -13,8 +13,10 @@ without silently converting the application to PostgreSQL.
 - A disk is attached to one service instance only. Do not scale this SQLite service
   horizontally. Render disables zero-downtime deploys for services with a disk.
 - Render disks are available only at runtime, not during build or pre-deploy
-  commands. The configured `start:render` command runs Prisma `db push` against
-  the mounted file before starting Next.js.
+  commands. The Blueprint therefore creates a temporary `build.db` for Prisma
+  schema generation/build-time work, then the configured `start:render` command
+  runs Prisma `db push` against the mounted `/var/data/agenttrust.db` before
+  starting Next.js. The temporary build database is not the runtime database.
 - This `db push` startup step is a bootstrap/workaround because the repository has
   not yet established a checked-in Prisma migration baseline. It is not a substitute
   for reviewed production migrations. Back up the disk before schema changes and
@@ -25,7 +27,7 @@ without silently converting the application to PostgreSQL.
 
 ## Deploy from GitHub
 
-1. Merge the deployment PR into `main`.
+1. Merge the deployment PR into `main`. The Blueprint is configured to deploy the `main` branch.
 2. In Render, choose **New → Blueprint** and connect
    `AkankshaJagdish/AgentTrust-Gateway`.
 3. Select `render.yaml` from the repository. Confirm the service is in Singapore
