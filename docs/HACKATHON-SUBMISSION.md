@@ -134,8 +134,8 @@ deployment verification are in [RENDER-DEPLOYMENT.md](RENDER-DEPLOYMENT.md).
 3. Create an active USD human consent with a spending cap of **$50.00** and a
    future expiry.
 4. Create an enabled policy whose per-transaction limit is **$50.00**, daily cap
-   is at least **$100.00**, and approval threshold is below the allowed test
-   amount (or leave the threshold unset).
+   is at least **$100.00**, and approval threshold is above the allowed test
+   amount (for example, $40.00 for a $25.00 allowed request), or leave the threshold unset.
 5. Set the environment variables below in the terminal. Do not put secrets in Git.
 
 ```bash
