@@ -5,7 +5,7 @@ const baseUrl = process.env.AGENTTRUST_BASE_URL?.replace(/\/$/, "");
 const keyId = process.env.AGENT_KEY_ID;
 const secret = process.env.AGENT_SECRET;
 const currency = process.env.DEMO_CURRENCY || "USD";
-const blockedAmount = process.env.DEMO_BLOCKED_AMOUNT || "75.00";
+const blockedAmount = process.env.DEMO_BLOCKED_AMOUNT || "300.00";
 const allowedAmount = process.env.DEMO_ALLOWED_AMOUNT || "25.00";
 const endpoint = "/api/agent/checkout";
 
