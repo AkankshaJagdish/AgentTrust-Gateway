@@ -248,3 +248,12 @@ npm run build
 ```
 
 See [database migration status and instructions](docs/DATABASE-MIGRATIONS.md). The project currently has no committed Prisma migration baseline; the documented migration creation step must be completed and reviewed before `prisma migrate deploy` is a valid fresh-install path.
+
+
+## Render deployment and hackathon demo
+
+A Render Blueprint is provided in `render.yaml`. It runs the existing SQLite/Prisma application with a persistent disk at `/var/data`, configures a generated session secret, and reads the public Render URL for PayPal redirects. The deployment requires a paid single-instance Render web service because persistent disks are not available on free web services. See [Render deployment instructions](docs/RENDER-DEPLOYMENT.md) for environment variables, sandbox app setup, webhook registration, health checks, and operational limitations.
+
+The repeatable live demo runner is `npm run demo:scenarios`. It sends unsigned, signed over-cap, and signed allowed requests to the configured application. The allowed scenario creates a real PayPal sandbox order only when sandbox credentials are configured. Buyer approval and merchant capture approval remain interactive steps. See [the hackathon submission and judge guide](docs/HACKATHON-SUBMISSION.md) for the full A–D workflow, Devpost copy, demo script, and video storyboard.
+
+**Deployment note:** this project has not yet established a checked-in Prisma migration baseline. The Render start command runs `prisma db push` against its persistent SQLite file as a prototype bootstrap. This is documented as a temporary deployment approach, not a substitute for reviewed production migrations. The SQLite disk service must remain single-instance and Render disk deployments have downtime during deploys.
