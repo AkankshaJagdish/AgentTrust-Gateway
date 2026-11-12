@@ -13,7 +13,6 @@ jobs:
       DATABASE_URL: "file:./ci.db"
       SESSION_SECRET: "ci-only-random-test-secret-at-least-32-bytes"
       PAYPAL_ENVIRONMENT: "SANDBOX"
-      NODE_ENV: "test"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
