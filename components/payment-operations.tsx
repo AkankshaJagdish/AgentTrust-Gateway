@@ -1,7 +1,8 @@
 "use client";
 import {useEffect,useState} from "react";
 type Auth={id:string;paypalAuthorizationId:string;status:string;amount:string;currency:string};
-type Order={id:string;paypalOrderId:string|null;status:string;amount:string;currency:string;approvalUrl:string|null;authorizations:Auth[];transitions:{toStatus:string;source:string}[];agent:{name:string}};
+type Capture={id:string;paypalCaptureId:string;status:string;amount:string;currency:string};
+type Order={id:string;paypalOrderId:string|null;status:string;amount:string;currency:string;approvalUrl:string|null;authorizations:Auth[];captures:Capture[];transitions:{toStatus:string;source:string}[];agent:{name:string}};
 const money=(v:string,c:string)=>Number(v).toLocaleString("en-US",{style:"currency",currency:c});
 export function PaymentOperations(){
  const [orders,setOrders]=useState<Order[]>([]);const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [notice,setNotice]=useState("");
@@ -13,6 +14,7 @@ export function PaymentOperations(){
  {orders.length===0&&<div className="empty">No PayPal orders yet. An ALLOW agent checkout creates an approval link.</div>}
  {orders.map(order=><div key={order.id} style={{borderTop:"1px solid #edf0f4",padding:"14px 0"}}>
   <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div className="event-title">{order.agent.name} · {money(order.amount,order.currency)}</div><div className="event-sub">{order.paypalOrderId??order.id} · <b>{order.status}</b> · {order.currency}</div></div>{order.approvalUrl&&order.status==="CREATED"&&<a className="btn" href={order.approvalUrl} target="_blank" rel="noreferrer">Buyer approval at PayPal</a>}</div>
+  {order.captures.map(capture=><div key={capture.id} style={{marginTop:12,padding:12,background:"#eefaf2",borderRadius:8}}><div className="event-title">PayPal Capture ID: {capture.paypalCaptureId}</div><div className="event-sub">{capture.status} · {money(capture.amount,capture.currency)}</div></div>)}
   {order.authorizations.map(auth=><div key={auth.id} style={{marginTop:12,padding:12,background:"#f7f9fc",borderRadius:8}}>
    <div className="event-title">Authorization {auth.paypalAuthorizationId}</div><div className="event-sub">{auth.status} · {money(auth.amount,auth.currency)}</div>
    {(auth.status==="CREATED"||auth.status==="AUTHORIZED")&&order.status==="AUTHORIZED"&&<CaptureForm order={order} auth={auth} busy={busy} onPost={post}/ >}
