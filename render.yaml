@@ -30,7 +30,7 @@ services:
       - key: PAYPAL_MERCHANT_ID
         value: ""
       - key: PAYPAL_WEBHOOK_ID
-        sync: false
+        value: ""
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
